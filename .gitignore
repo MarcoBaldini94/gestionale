@@ -1,0 +1,7 @@
+# Dati personali: non vanno nel repository (GitHub Pages è pubblico)
+backup/
+bilancio-personale-*.json
+*import*.json
+.DS_Store
+Thumbs.db
+desktop.ini

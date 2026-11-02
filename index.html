@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bilancio personale</title>
+<meta name="description" content="Patrimonio, entrate, tasse e scadenze personali">
+<meta name="theme-color" content="#0b3a53">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon48.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Bilancio">
+<link rel="preload" href="fonts/IBMPlexSans-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand"><svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true"><rect width="38" height="38" rx="11" style="fill:var(--hero)"/><rect x="9" y="20" width="5" height="9" rx="1.5" style="fill:var(--band-fg)"/><rect x="16.5" y="14" width="5" height="15" rx="1.5" style="fill:var(--band-muted)"/><rect x="24" y="9" width="5" height="20" rx="1.5" style="fill:var(--tasse)"/></svg>
+  <h1>Bilancio personale<small>Patrimonio · Entrate · Tasse · Scadenze</small></h1></div>
+  <div class="hdr-r"><a id="hdr-par" href="#parametri" title="Parametri fiscali e previdenziali"><span aria-hidden="true">⚙</span> Parametri</a>
+  <a id="hdr-sync" class="hdr-pill" href="#collegamenti" title="Backup sul PC e collegamento con l'app Guadagni sondaggi"><span aria-hidden="true">⇄</span> <span id="hdr-sync-t">Collegamenti</span></a>
+  <div class="status" id="status" data-s="busy" role="status"><i></i><span id="status-t">Caricamento…</span></div></div>
+</div></header>
+<nav class="tabs" aria-label="Fogli"><div class="wrap" id="tabs"></div></nav>
+<main><div class="wrap" id="view"></div></main>
+<script src="app.js"></script>
+<script>if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
+</body>
+</html>
