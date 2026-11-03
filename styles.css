@@ -541,3 +541,15 @@ a.btn{text-decoration:none;display:inline-block}
 label.btn{display:inline-block}
 #lk-hub-form{margin:0}
 #lk-sond-info{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
+
+/* ===== scheda Cedolini ===== */
+tr.ced-row{cursor:pointer}
+tr.ced-row:focus-visible td{outline:2px solid var(--accent);outline-offset:-2px}
+table.ced-det td small{font-size:12px}
+table.ced-det tr.ced-tot td{color:var(--fg);font-size:13px;background:var(--accent-soft)!important;padding:10px 8px}
+.ced-nv{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));padding:10px 0;border-top:1px solid var(--line)}
+.ced-nv-h{grid-column:1/-1;display:flex;justify-content:space-between;gap:12px}
+.ced-nv-h .am{font-family:var(--f-mono);white-space:nowrap}
+.ced-nv label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.ced-nv select.in{width:100%;min-width:0}
+.chip.ok{color:var(--good)}

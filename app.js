@@ -19,7 +19,7 @@ const scadRow=(voce,anno,auto,frazione,scadenza)=>({id:uid(),voce,anno,auto:auto
 const isY=y=>/^\d{4}$/.test(String(y));
 
 function defaults(){const y=new Date().getFullYear();return{v:3,anni:{[y]:{...DEF_ANNO}},globali:{...DEF_GLOB},registro:[],patrimonio:{[y]:blankPat()},
-  chiusure:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null};}
+  chiusure:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null};}
 
 /* conversione dal formato del foglio (v1/v2): mesi → registro movimenti, parametri → tabella per anno */
 function migrate(o){
@@ -38,6 +38,19 @@ function migrate(o){
     :[["qb",2025],["imp",2025],["qa",2026],["qb",2026],["imp",2026]].map(([a,y])=>scadRow(AUTO_LBL[a]+" "+y,y,a));
   return{v:3,anni,globali,registro,patrimonio:{2026:pat},chiusure,fondo:{capitale:num(st.versFondo)},etfBase:num(st.versEtf),scadenzario:scad,accantonato:num(o.accantonato)};
 }
+/* archivio cedolini letto dall'Hub (vedi sezione "cedolini"): solo voci economiche, nessun dato anagrafico */
+const CED_CAT=["competenza","inps","previdenza_altro","irpef","addizionale","sostitutiva","altra_trattenuta"],CED_TIPI=["fissa","variabile","prestazioni_aggiuntive","una_tantum"];
+const ymOk=v=>/^\d{4}-\d{2}$/.test(v),dOk=v=>/^\d{4}-\d{2}-\d{2}$/.test(v);
+function cleanCed(c){if(!c||typeof c!=="object"||!ymOk(c.periodo))return null;const h=c.intestazione||{},hh={};
+  ["imponibileIrpefMese","detrazioniMese","imponibileProgressivo","irpefProgressiva","totaleCompetenze","totaleTrattenute","netto"].forEach(k=>{if(num(h[k])!=null)hh[k]=h[k];});
+  const voci=(Array.isArray(c.voci)?c.voci:[]).filter(v=>v&&typeof v==="object").map(v=>({codice:str(v.codice).slice(0,8),descrizione:str(v.descrizione).slice(0,80),
+    categoria:CED_CAT.includes(v.categoria)?v.categoria:"altra_trattenuta",tipo:CED_TIPI.includes(v.tipo)?v.tipo:null,riferimento:ymOk(v.riferimento)?v.riferimento:c.periodo,importo:num(v.importo)??0,...(v.nuova?{nuova:true}:{})}));
+  const k=c.controllo||{};
+  return{file:str(c.file).slice(0,120),periodo:c.periodo,dataPagamento:dOk(c.dataPagamento)?c.dataPagamento:"",dataAssunzione:dOk(c.dataAssunzione)?c.dataAssunzione:"",intestazione:hh,voci,
+    controllo:{ok:k.ok===true,competenze:num(k.competenze),trattenute:num(k.trattenute),netto:num(k.netto)},nuoveVoci:(Array.isArray(c.nuoveVoci)?c.nuoveVoci:[]).map(str)};}
+function sanitizeCed(x){if(!x||typeof x!=="object")return null;
+  return{agg:str(x.agg),lista:(Array.isArray(x.lista)?x.lista:[]).map(cleanCed).filter(Boolean),mesi:(Array.isArray(x.mesi)?x.mesi:[]).filter(ymOk),
+    errori:(Array.isArray(x.errori)?x.errori:[]).filter(e=>e&&typeof e==="object").map(e=>({file:str(e.file),errore:str(e.errore)}))};}
 function sanitize(s){
   const d=defaults(),o={v:3};
   o.anni={};for(const [y,a] of Object.entries(s.anni||{})){if(!isY(y))continue;const r={};for(const k of Object.keys(DEF_ANNO))r[k]=num(a&&a[k])??DEF_ANNO[k];o.anni[y]=r;}
@@ -54,6 +67,7 @@ function sanitize(s){
     voce:str(r.voce),anno:num(r.anno),auto:AUTO_LBL[r.auto]?r.auto:"",tipo:["qa","qb","imp","spesa"].includes(r.tipo)?r.tipo:"",ric:str(r.ric),frazione:num(r.frazione)??1,meno:num(r.meno)??0,importo:num(r.importo),scadenza:str(r.scadenza),pagato:r.pagato===true,forzaNonPagato:r.forzaNonPagato===true,dataPag:str(r.dataPag)}));
   o.accantonato=num(s.accantonato);
   o.sondExt=s.sondExt&&/^\d{4}-\d{2}$/.test(s.sondExt.da)?{da:s.sondExt.da,a:/^\d{4}-\d{2}$/.test(s.sondExt.a)?s.sondExt.a:s.sondExt.da,fonte:str(s.sondExt.fonte),agg:str(s.sondExt.agg)}:null;
+  o.ced=sanitizeCed(s.ced);
   o.prev={entrate:num(s.prev&&s.prev.entrate),spese:num(s.prev&&s.prev.spese),inv:num(s.prev&&s.prev.inv)};
   o.gen=(Array.isArray(s.gen)?s.gen:[]).filter(x=>typeof x==="string");
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
@@ -296,7 +310,7 @@ const ICO={
  trend:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>'};
 
 /* ================= schede ================= */
-const TABS=[["dashboard","Dashboard"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],["collegamenti","Collegamenti e backup"]];
+const TABS=[["dashboard","Dashboard"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],["cedolini","Cedolini"],["collegamenti","Collegamenti e backup"]];
 const V={};
 
 V.dashboard=()=>{const PY=R.PY,TY=R.TY,c=`anni.${TY}`,pv=`anni.${TY-1}`;return `
@@ -556,13 +570,15 @@ V.entrate=()=>{
  const list=[...noDate,...idx].map(i=>S.registro[i].ext?`<tr class="extrow"><td>${dIt(S.registro[i].data)}</td><td>${FN[S.registro[i].fonte]}</td><td>${fmt(S.registro[i].importo)}</td><td class="muted">${S.registro[i].nota} <span class="chip auto">auto</span></td><td></td></tr>`:`<tr><td>${inpT(`registro.${i}.data`,"date")}</td><td>${sel(`registro.${i}.fonte`,FONTI_Y(Y).some(f=>f[0]===S.registro[i].fonte)?FONTI_Y(Y):[...FONTI_Y(Y),FONTI.find(f=>f[0]===S.registro[i].fonte)])}</td><td>${inp(`registro.${i}.importo`)}</td><td>${inpT(`registro.${i}.nota`,"text","Nota (n. fattura, cliente…)")}</td>
   <td class="c"><button class="icon-btn" data-act="del-mov" data-idx="${i}" aria-label="Elimina movimento" ${READONLY?"disabled":""}>×</button></td></tr>`).join("");
  const FY=FONTI_E(Y),used=+Y>=2027?FY:FY.filter(([k])=>T&&T.tot[k]!==0);const cols=used.length?used:FY;
- let piv="";if(T){MESI.forEach((m,i)=>{piv+=`<tr><td>${m}</td>${cols.map(([k])=>{const nE=cellEntries(Y,i,k).length;if(k==="sond"&&sondCovers(`${Y}-${String(i+1).padStart(2,"0")}`))return `<td class="auto-c" title="Prelievi dall'app Guadagni sondaggi">${out(`${c}.mm.${k}.${i}`)}<span class="nm">auto</span></td>`;return nE>1?`<td class="multi" title="${nE} movimenti: modificali nell'elenco dettagliato">${out(`${c}.mm.${k}.${i}`)}<span class="nm">${nE} mov.</span></td>`:`<td class="ce">${cellInp(Y,i,k)}</td>`;}).join("")}<td class="gain">${out(`${c}.tm.${i}`)}</td></tr>`;});
+ let piv="";if(T){MESI.forEach((m,i)=>{piv+=`<tr><td>${m}</td>${cols.map(([k])=>{const nE=cellEntries(Y,i,k).length;if(k==="sond"&&sondCovers(`${Y}-${String(i+1).padStart(2,"0")}`))return `<td class="auto-c" title="Prelievi dall'app Guadagni sondaggi">${out(`${c}.mm.${k}.${i}`)}<span class="nm">auto</span></td>`;
+   if(cedCovers(`${Y}-${String(i+1).padStart(2,"0")}`,k))return `<td class="auto-c" title="Netto dal cedolino (scheda Cedolini)">${out(`${c}.mm.${k}.${i}`)}<span class="nm">cedolino</span></td>`;return nE>1?`<td class="multi" title="${nE} movimenti: modificali nell'elenco dettagliato">${out(`${c}.mm.${k}.${i}`)}<span class="nm">${nE} mov.</span></td>`:`<td class="ce">${cellInp(Y,i,k)}</td>`;}).join("")}<td class="gain">${out(`${c}.tm.${i}`)}</td></tr>`;});
   piv+=`<tr class="tot"><td>Totale ${Y}</td>${cols.map(([k])=>`<td>${out(`${c}.tot.${k}`)}</td>`).join("")}<td class="gain">${out(`${c}.tot.all`)}</td></tr>`;}
  const today=TODAY;
  return `<section class="sheet">
  <div class="sheet-h"><h2>Entrate ${Y}</h2>${yearBar()}<p>${+Y>=2027?"Dal 2027 restano stipendio SSN e sondaggi, più «Altro» per le entrate occasionali (rimborso IRPEF, rimborsi spese, regali…). Lo stipendio è il netto in busta, tutto compreso: contiene già intramoenia e prestazioni aggiuntive. Il loro lordo, che serve solo per la Quota B ENPAM, si inserisce nella scheda Tasse.":"Un unico registro di movimenti: data di incasso, fonte, importo. Solo la libera professione entra nel forfettario, per cassa. Lo stipendio SSN è il netto in busta, tutto compreso (anche intramoenia e aggiuntive); il loro lordo per la Quota B ENPAM si inserisce nella scheda Tasse."}</p></div>
  ${euBox(Y)}
  ${sondNote()}
+ ${cedNote()}
  <p class="note">Scrivi il totale del mese direttamente nella cella della fonte: lo stipendio netto dal cedolino. Le celle con più movimenti (es. più fatture nello stesso mese) si modificano nell'elenco dettagliato in fondo.</p>
  <details class="more"><summary>Aggiungi un singolo movimento con data e nota</summary>
  <div class="box c-good"><h3>Nuovo movimento</h3>
@@ -624,8 +640,8 @@ function taxPayBox(){const tp=R.tp;if(!tp||!tp.years.length)return "";
    <span class="yv">${fmt(Yy.res)}<small>${Yy.pag>0?"pagato "+fmt(Yy.pag):""}</small></span></button>`;}).join("")}</div>
   <div class="legend"><span><i style="background:var(--tax)"></i>da pagare</span><span><i class="hatch" style="--c:var(--good)"></i>pagato</span></div>
  </div></div>`;}
-const intraBox=(Y,c)=>{const q=+Y>=2027;let rows="";MESI.forEach((m,i)=>{const nE=cellEntries(Y,i,"intra").length;
-  rows+=`<tr><td>${m}</td>${nE>1?`<td class="multi" title="${nE} movimenti: modificali in Entrate, elenco dettagliato">${out(`${c}.mm.intra.${i}`)}<span class="nm">${nE} mov.</span></td>`:`<td class="ce">${cellInp(Y,i,"intra")}</td>`}<td>${out(`${c}.cumI.${i}`,"eur","zd")}</td>${q?`<td>${out(`${c}.ytd.qb.${i}`,"eur","tax zd")}</td>`:""}</tr>`;});
+const intraBox=(Y,c)=>{const q=+Y>=2027;let rows="";MESI.forEach((m,i)=>{const nE=cellEntries(Y,i,"intra").length,au=cedCovers(`${Y}-${String(i+1).padStart(2,"0")}`,"intra");
+  rows+=`<tr><td>${m}</td>${au?`<td class="auto-c" title="Prestazioni aggiuntive e ALPI dal cedolino">${out(`${c}.mm.intra.${i}`)}<span class="nm">cedolino</span></td>`:nE>1?`<td class="multi" title="${nE} movimenti: modificali in Entrate, elenco dettagliato">${out(`${c}.mm.intra.${i}`)}<span class="nm">${nE} mov.</span></td>`:`<td class="ce">${cellInp(Y,i,"intra")}</td>`}<td>${out(`${c}.cumI.${i}`,"eur","zd")}</td>${q?`<td>${out(`${c}.ytd.qb.${i}`,"eur","tax zd")}</td>`:""}</tr>`;});
  rows+=`<tr class="tot"><td>Totale ${Y}</td><td>${out(`${c}.tot.intra`)}</td><td></td>${q?`<td>${out(c+".qbIntra","eur","tax")}</td>`:""}</tr>`;
  return `<div class="box c-tax" id="intra-box"><h3>Intramoenia e prestazioni aggiuntive ${Y} · lordo dal cedolino</h3>
   <p class="note">Inserisci il lordo del mese (voci ALPI e prestazioni aggiuntive del cedolino). Serve solo per la Quota B ENPAM: non è un'entrata in più, perché il netto è già compreso nello stipendio in Entrate.</p>
@@ -898,6 +914,7 @@ view.addEventListener("input",e=>{
  const k=el.dataset.k;
  if(k==="cell"){const p=parseIt(el.value);if(!p.ok){el.classList.add("bad");return;}el.classList.remove("bad");
    const Y=+el.dataset.y,m=+el.dataset.m,f=el.dataset.f,e=cellEntries(Y,m,f);
+   if(cedCovers(`${Y}-${String(m+1).padStart(2,"0")}`,f))return;
    if(p.v==null){if(e.length===1)S.registro.splice(e[0],1);}
    else if(e.length===1)S.registro[e[0]].importo=p.v;
    else if(e.length===0){const d=new Date(Y,m+1,0).getDate();S.registro.push({id:uid(),data:`${Y}-${String(m+1).padStart(2,"0")}-${d}`,fonte:f,importo:p.v,nota:"Totale del mese"});}
@@ -958,6 +975,7 @@ view.addEventListener("submit",e=>{
  const msg=document.getElementById("nm-msg");
  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!p.ok||p.v==null){msg.hidden=false;msg.textContent="Inserisci una data e un importo validi.";return;}
  if(f==="sond"&&sondCovers(d.slice(0,7))){msg.hidden=false;msg.textContent="I sondaggi di "+MESE_L(d.slice(0,7))+" arrivano dall'app Guadagni sondaggi: registra lì il prelievo.";return;}
+ if(cedCovers(d.slice(0,7),f)){msg.hidden=false;msg.textContent="Lo stipendio di "+MESE_L(d.slice(0,7))+" arriva dal cedolino: per correggerlo cambia il PDF nella cartella Cedolini.";return;}
  S.registro.push({id:uid(),data:d,fonte:f,importo:p.v,nota});
  const y=+d.slice(0,4);if(!allYears().includes(y))S.patrimonio[y]=S.patrimonio[y]||blankPat();
  UY=y;render();scheduleSave();
@@ -1070,7 +1088,7 @@ async function sondSync(manual){
 const MESE_L=ym=>ym?MESI[+ym.slice(5,7)-1]+" "+ym.slice(0,4):"";
 function sondNote(){if(!S.sondExt)return "";
  return `<div class="banner sond-b"><b>Sondaggi automatici</b> da ${MESE_L(S.sondExt.da)}: ogni mese vale la somma dei <b>prelievi</b> registrati nell'app Guadagni sondaggi (le celle con «auto» non si modificano qui). Aggiornato: ${fmtWhen(Date.parse(S.sondExt.agg))}. <a href="#collegamenti">Dettagli</a></div>`;}
-const linkMsgs={hub:"",sond:"",file:""};
+const linkMsgs={hub:"",sond:"",file:"",ced:""};
 function linkMsg(k,t){linkMsgs[k]=t;const el=document.getElementById("lk-"+k+"-msg");if(el){el.textContent=t;el.hidden=!t;}}
 function hubBadge(){const s=hubState(),url=hubUrl();
  if(!url)return ["off","non attivo"];
@@ -1087,7 +1105,8 @@ function refreshLinks(){
  const [k,t]=hubBadge(),p=document.getElementById("hdr-sync");
  if(p){p.dataset.s=k;document.getElementById("hdr-sync-t").textContent=k==="warn"?"PC non raggiungibile":"Collegamenti";}
  const b=document.getElementById("lk-hub-badge");if(b){b.textContent=t;b.dataset.s=k;}
- const si=document.getElementById("lk-sond-info");if(si)si.innerHTML=sondInfo();}
+ const si=document.getElementById("lk-sond-info");if(si)si.innerHTML=sondInfo();
+ const ci=document.getElementById("lk-ced-info");if(ci)ci.innerHTML=cedInfo();}
 V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
  return `<section class="sheet">
  <div class="sheet-h"><h2>Collegamenti e backup</h2><p>I dati stanno in questo browser. Ogni modifica viene copiata sul PC di casa tramite l'Hub (Tailscale); i prelievi dei sondaggi arrivano da soli dall'app Guadagni sondaggi.</p></div>
@@ -1098,6 +1117,11 @@ V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
   <div class="actions"><button class="btn" data-act="x-sond">Aggiorna ora</button><a class="btn ghost" href="https://marcobaldini94.github.io/guadagni-sondaggi/">Apri l'app sondaggi</a></div>
   <p class="note" id="lk-sond-msg" ${linkMsgs.sond?"":"hidden"}>${linkMsgs.sond}</p>
   <p class="note">Da ${S.sondExt?MESE_L(S.sondExt.da):"il primo mese presente nell'app sondaggi"} in poi la colonna Sondaggi delle Entrate è calcolata: somma dei prelievi del mese su tutti i portali (criterio di cassa). I mesi precedenti restano quelli inseriti a mano. Il controllo avviene all'apertura dell'app e ogni volta che torni su questa finestra.</p></div>
+ <div class="box c-good"><h3>Cedolini</h3>
+  <dl class="kv" id="lk-ced-info">${cedInfo()}</dl>
+  <div class="actions"><button class="btn" data-act="x-ced">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Apri i cedolini</a></div>
+  <p class="note" id="lk-ced-msg" ${linkMsgs.ced?"":"hidden"}>${linkMsgs.ced}</p>
+  <p class="note">I PDF salvati nella cartella OneDrive «Assistente Finanziario/Cedolini» vengono letti sul PC di casa dall'Hub, senza servizi esterni. Per ogni cedolino con totali e netto verificati, lo stipendio netto entra in Entrate e il lordo di prestazioni aggiuntive e ALPI nella Quota B, nel mese di pagamento.</p></div>
  <div class="box"><h3>Backup automatico sul PC</h3>
   <p class="lk-badge"><span id="lk-hub-badge" data-s="${hubBadge()[0]}">${hubBadge()[1]}</span></p>
   <form class="addrow" id="lk-hub-form" autocomplete="off">
@@ -1115,10 +1139,11 @@ function fromAnyBackup(o){if(o&&o.dati&&typeof o.dati==="object")o=o.dati;if(o&&
  if(!o||typeof o!=="object"||!(o.anni||o.registro||o.parametri))throw new Error("il file non sembra un backup del Bilancio personale");return o;}
 view.addEventListener("click",async e=>{const b=e.target.closest("[data-act^='x-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
  if(a==="x-sond"){sondSync(true);return;}
+ if(a==="x-ced"){cedSync(true,true);return;}
  if(a==="x-hub-now"){if(!hubUrl()){linkMsg("hub","Inserisci prima l'indirizzo dell'Hub.");return;}if(!hasRealData(S)){linkMsg("hub","Non c'è ancora niente da salvare.");return;}hubSync(true);return;}
  if(a==="x-hub-restore"){try{linkMsg("hub","Scarico l'ultimo backup…");const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");const o=fromAnyBackup(r);
    if(hasRealData(S)&&!confirm("Sostituire i dati di questo dispositivo con il backup "+(r.file||"")+"?")){linkMsg("hub","Ripristino annullato.");return;}
-   replaceState(o);linkMsg("hub","Ripristinato "+(r.file||"l'ultimo backup")+".");sondSync(false);}
+   replaceState(o);linkMsg("hub","Ripristinato "+(r.file||"l'ultimo backup")+".");sondSync(false);cedSync(false);}
   catch(err){linkMsg("hub","Ripristino non riuscito: "+err.message+".");}return;}
  if(a==="x-exp"){const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});const u=URL.createObjectURL(blob),l=document.createElement("a");
   l.href=u;l.download="bilancio-personale-"+new Date().toLocaleDateString("sv-SE")+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);linkMsg("file","File scaricato.");return;}
@@ -1138,6 +1163,124 @@ view.addEventListener("submit",async e=>{if(e.target.id!=="lk-hub-form")return;e
   if(ok)hubSync(true);sondSync(false);}
  catch(err){linkMsg("hub","Prova non riuscita: "+err.message+".");refreshLinks();}});
 
+/* ================= cedolini (letti in locale dall'Hub) ================= */
+/* L'Hub su PC2 controlla la cartella OneDrive «Cedolini», legge ogni PDF in locale e pubblica
+   GET /api/cedolini/archivio. Qui: per ogni cedolino con totali e netto verificati,
+   Entrate › Stipendio SSN = netto e Intramoenia/aggiuntiva = lordo delle prestazioni aggiuntive,
+   nel mese di pagamento (data di riscossione). I mesi senza cedolino restano manuali. */
+const CED_STATE_KEY="bilancio-ced-stato";
+function cedState(){return lsJSON(CED_STATE_KEY)}
+function setCedState(o){lsSet(CED_STATE_KEY,JSON.stringify(Object.assign(cedState(),o)))}
+const cedCovers=(ym,f)=>!!(S.ced&&(f==="ssn"||f==="intra")&&S.ced.mesi.includes(ym));
+const cedYM=c=>(c.dataPagamento||c.periodo+"-28").slice(0,7);
+function cedDerive(c){const v=c.voci||[],sm=f=>v.filter(f).reduce((a,x)=>a+(+x.importo||0),0),comp=x=>x.categoria==="competenza";
+ const d={lordo:sm(comp),fisse:sm(x=>comp(x)&&x.tipo==="fissa"),variabili:sm(x=>comp(x)&&x.tipo==="variabile"),pa:sm(x=>comp(x)&&x.tipo==="prestazioni_aggiuntive"),
+  inps:sm(x=>x.categoria==="inps"),prev:sm(x=>x.categoria==="previdenza_altro"),irpef:sm(x=>x.categoria==="irpef"),add:sm(x=>x.categoria==="addizionale"),
+  sost:sm(x=>x.categoria==="sostitutiva"),altre:sm(x=>x.categoria==="altra_trattenuta")};
+ d.contributi=d.inps+d.prev;d.tasse=d.irpef+d.add+d.sost;d.netto=d.lordo-d.contributi-d.tasse-d.altre;return d;}
+function applyCed(arch){
+ const lista=(arch.cedolini||[]).map(cleanCed).filter(Boolean).sort((a,b)=>(a.periodo+a.file).localeCompare(b.periodo+b.file));
+ const per={};lista.filter(c=>c.controllo.ok).forEach(c=>{(per[cedYM(c)]=per[cedYM(c)]||[]).push(c);});
+ const mesi=Object.keys(per).sort();
+ const sig=s=>JSON.stringify([s.registro.filter(r=>r.fonte==="ssn"||r.fonte==="intra").map(r=>[r.data,r.fonte,r.importo,r.ext||""]).sort(),s.ced&&s.ced.lista.map(c=>[c.file,c.controllo.netto,c.nuoveVoci.join()]),s.ced&&s.ced.errori.length]);
+ const prima=sig(S);
+ const keep=S.registro.filter(r=>!(r.ext==="cedolini"||((r.fonte==="ssn"||r.fonte==="intra")&&mesi.includes((r.data||"").slice(0,7)))));
+ const add=[];
+ mesi.forEach(ym=>{const g=per[ym],y=+ym.slice(0,4),m=+ym.slice(5,7);
+  const data=g.map(c=>c.dataPagamento).filter(Boolean).sort().pop()||`${ym}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`;
+  const nomi=g.map(c=>MESE_L(c.periodo)).join(", ");
+  const netto=Math.round(g.reduce((a,c)=>a+c.intestazione.netto,0)*100)/100;
+  add.push({id:"ced-ssn-"+ym,data,fonte:"ssn",importo:netto,nota:"Netto del cedolino di "+nomi,ext:"cedolini"});
+  const pa=g.flatMap(c=>c.voci.filter(v=>v.categoria==="competenza"&&v.tipo==="prestazioni_aggiuntive"));
+  const lordo=Math.round(pa.reduce((a,v)=>a+v.importo,0)*100)/100;
+  if(lordo!==0)add.push({id:"ced-intra-"+ym,data,fonte:"intra",importo:lordo,nota:pa.map(v=>v.descrizione.toLowerCase()+" (rif. "+v.riferimento.slice(5)+"/"+v.riferimento.slice(0,4)+")").join(" · ")+" · cedolino di "+nomi,ext:"cedolini"});});
+ S.registro=[...keep,...add];
+ S.ced={agg:str(arch.aggiornato),lista,mesi,errori:(arch.errori||[]).map(e=>({file:str(e.file),errore:str(e.errore)}))};
+ mesi.forEach(ym=>{const y=+ym.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});
+ return sig(S)!==prima;}
+let cedBusy=false;
+async function cedSync(manual,rileggi){
+ if(cedBusy)return;
+ if(!hubUrl()){if(manual)linkMsg("ced","Serve l'indirizzo dell'Hub (riquadro «Backup automatico sul PC»).");return;}
+ if(!hasRealData(S)){if(manual)linkMsg("ced","Prima importa o ripristina i dati del bilancio.");return;}
+ cedBusy=true;if(manual)linkMsg("ced",rileggi?"Chiedo al PC di rileggere la cartella…":"Controllo i cedolini…");
+ try{const r=rileggi?await hubFetch("/api/cedolini/aggiorna",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}):await hubFetch("/api/cedolini/archivio");
+  const changed=applyCed(r);setCedState({check:Date.now(),err:""});
+  if(changed){afterExternalChange();scheduleSave();}else if(current==="cedolini")afterExternalChange();
+  if(manual)linkMsg("ced",changed?"Cedolini aggiornati.":"Già aggiornato: nessuna differenza.");}
+ catch(e){setCedState({check:Date.now(),err:e.message});if(manual)linkMsg("ced","Cedolini non letti: "+e.message+".");}
+ finally{cedBusy=false;refreshLinks();}}
+function cedInfo(){const cs=cedState(),c=S.ced;
+ const ok=c?c.lista.filter(x=>x.controllo.ok).length:0,nv=c?[...new Set(c.lista.flatMap(x=>x.nuoveVoci))].length:0;
+ return [["Cedolini letti",c?ok+" verificati"+(c.lista.length>ok?", "+(c.lista.length-ok)+" da controllare":"")+(c.errori.length?", "+c.errori.length+" illeggibili":""):"—"],
+  ["Mesi automatici in Entrate",c&&c.mesi.length?MESE_L(c.mesi[0])+" – "+MESE_L(c.mesi[c.mesi.length-1]):"nessuno"],
+  ["Voci nuove da confermare",nv?String(nv):"nessuna"],
+  ["Ultima lettura sul PC",c&&c.agg?fmtWhen(Date.parse(c.agg)):"—"],
+  ["Ultimo controllo",cs.err?"non riuscito ("+esc(cs.err)+")":fmtWhen(cs.check)]].map(([a,b])=>`<dt>${a}</dt><dd class="txtv">${b}</dd>`).join("");}
+function cedNote(){if(!S.ced||!S.ced.mesi.length)return "";
+ return `<div class="banner sond-b"><b>Stipendio dai cedolini</b> per ${S.ced.mesi.length} ${S.ced.mesi.length===1?"mese":"mesi"} (${MESE_L(S.ced.mesi[0])} – ${MESE_L(S.ced.mesi[S.ced.mesi.length-1])}): netto in busta nel mese di pagamento, celle «cedolino» in sola lettura. <a href="#cedolini">Apri i cedolini</a></div>`;}
+
+const CAT_L={competenza:"Competenza",inps:"Contributo INPS",previdenza_altro:"TFR, ONAOSI, altra previdenza",irpef:"IRPEF",addizionale:"Addizionale",sostitutiva:"Imposta sostitutiva",altra_trattenuta:"Altra trattenuta"};
+const TIPO_L={fissa:"Fissa",variabile:"Variabile (guardie, straordinari…)",prestazioni_aggiuntive:"Prestazioni aggiuntive / ALPI",una_tantum:"Una tantum (arretrati, conguagli…)"};
+let CED_SEL=null;
+const scaglione=R0=>R0>50000?"43%":R0>28000?"33%":"23%";
+V.cedolini=()=>{const c=S.ced,L=c?c.lista:[];
+ const head=`<div class="sheet-h"><h2>Cedolini</h2><p>Busta paga letta dai PDF nella cartella OneDrive «Assistente Finanziario/Cedolini». La lettura avviene sul PC di casa (Hub), senza servizi esterni; qui arrivano solo le voci economiche, senza dati anagrafici.</p></div>
+ <div class="actions"><button class="btn" data-act="x-ced">Aggiorna ora</button><a class="btn ghost" href="#collegamenti">Stato del collegamento</a></div>
+ <p class="note" id="lk-ced-msg" ${linkMsgs.ced?"":"hidden"}>${linkMsgs.ced}</p>`;
+ if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cedolino ancora. ${hubUrl()?"Salva i PDF nella cartella Cedolini e premi «Aggiorna ora»: il PC li legge entro un minuto.":"Imposta prima l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div>
+  ${c&&c.errori.length?errBox(c):""}</section>`;
+ if(!CED_SEL||!L.some(x=>x.file===CED_SEL))CED_SEL=L[L.length-1].file;
+ const nuove=[];L.forEach(x=>x.voci.forEach(v=>{if(v.nuova&&!nuove.some(n=>n.codice===v.codice))nuove.push({...v,periodo:x.periodo});}));
+ const rows=L.slice().reverse().map(x=>{const d=cedDerive(x),st=!x.controllo.ok?'<span class="chip">da controllare</span>':x.nuoveVoci.length?'<span class="chip">voci nuove</span>':'<span class="chip ok">verificato</span>';
+  return `<tr class="ced-row ${x.file===CED_SEL?"hl":""}" data-act="ced-sel" data-file="${esc(x.file)}" tabindex="0"><td>${MESI[+x.periodo.slice(5)-1]} ${x.periodo.slice(0,4)}</td><td>${dIt(x.dataPagamento)}</td><td>${fmt(d.lordo)}</td><td>${fmt(d.contributi)}</td><td class="tax">${fmt(d.tasse)}</td><td><b>${fmt(d.netto)}</b></td><td>${d.lordo?Math.round(d.netto/d.lordo*100)+"%":"—"}</td><td>${st}</td></tr>`;}).join("");
+ const x=L.find(y=>y.file===CED_SEL),d=cedDerive(x),h=x.intestazione;
+ const grp=[["Competenze",v=>v.categoria==="competenza"],["Contributi INPS",v=>v.categoria==="inps"],["TFR, ONAOSI e altra previdenza",v=>v.categoria==="previdenza_altro"],["Imposte",v=>["irpef","addizionale","sostitutiva"].includes(v.categoria)],["Altre trattenute",v=>v.categoria==="altra_trattenuta"]];
+ let det="";grp.forEach(([t,f])=>{const vv=x.voci.filter(f);if(!vv.length)return;const sub=vv.reduce((a,v)=>a+v.importo,0),comp=t==="Competenze";
+  det+=`<tr class="mh"><td>${t}</td><td class="am">${fmt(comp?sub:-sub)}</td></tr>`;
+  vv.forEach(v=>{const meta=[v.categoria==="competenza"&&v.tipo?TIPO_L[v.tipo].split(" (")[0].toLowerCase():"",v.riferimento!==x.periodo?"lavoro di "+MESE_L(v.riferimento).toLowerCase():""].filter(Boolean).join(" · ");
+   det+=`<tr><td>${esc(v.descrizione)}${v.nuova?' <span class="chip">nuova</span>':""}${meta?`<br><small class="muted">${meta}</small>`:""}</td><td class="am">${fmt(v.categoria==="competenza"?v.importo:-v.importo)}</td></tr>`;});});
+ det+=`<tr class="mh ced-tot"><td>Netto in busta</td><td class="am">${fmt(d.netto)}</td></tr>`;
+ const chk=[];
+ chk.push(x.controllo.ok?`Totali e netto letti corrispondono a quelli stampati (${fmt(h.netto)}).`:`<b>Il netto ricostruito dalle voci (${fmt(x.controllo.netto)}) non corrisponde a quello stampato (${fmt(h.netto)})</b>: questo cedolino non entra nelle Entrate finché non si verifica.`);
+ if(h.imponibileProgressivo!=null)chk.push(`Imponibile IRPEF da inizio anno ${fmt(h.imponibileProgressivo)}, IRPEF netta trattenuta ${fmt(h.irpefProgressiva)}: aliquota media ${fmt(h.irpefProgressiva/h.imponibileProgressivo,"pct")}, ultimo scaglione raggiunto ${scaglione(h.imponibileProgressivo)}.`);
+ const late=x.voci.filter(v=>v.categoria==="competenza"&&v.riferimento!==x.periodo);
+ if(late.length)chk.push("Pagate in questo cedolino ma riferite ad altri mesi: "+late.map(v=>esc(v.descrizione.toLowerCase())+" ("+MESE_L(v.riferimento).toLowerCase()+", "+fmt(v.importo)+")").join("; ")+".");
+ if(d.pa)chk.push(`Prestazioni aggiuntive/ALPI ${fmt(d.pa)} lordi: entrano nella Quota B ENPAM di ${MESE_L(cedYM(x)).toLowerCase()} (scheda Tasse); imposta sostitutiva trattenuta ${fmt(d.sost)}.`);
+ return `<section class="sheet">${head}
+ ${nuove.length?`<div class="box c-tax" id="ced-nuove"><h3>Voci nuove da confermare</h3>
+  <p class="note">Codici mai visti prima: il netto è già verificato, ma va confermato che tipo di voce sono (serve per stipendio fisso, guardie e Quota B). La scelta vale per tutti i cedolini, anche futuri.</p>
+  ${nuove.map(v=>`<div class="ced-nv" data-cod="${esc(v.codice)}" data-desc="${esc(v.descrizione)}"><div class="ced-nv-h"><span><b>${esc(v.codice)}</b> ${esc(v.descrizione)}<br><small class="muted">${MESE_L(v.periodo)}</small></span><span class="am">${fmt(v.importo)}</span></div>
+   <label>Categoria<select class="in sel ced-cat">${CED_CAT.map(k=>`<option value="${k}" ${k===v.categoria?"selected":""}>${CAT_L[k]}</option>`).join("")}</select></label>
+   <label>Tipo (solo competenze)<select class="in sel ced-tipo">${CED_TIPI.map(k=>`<option value="${k}" ${k===(v.tipo||"una_tantum")?"selected":""}>${TIPO_L[k]}</option>`).join("")}</select></label></div>`).join("")}
+  <div class="actions"><button class="btn" data-act="x-ced-ok">Conferma</button></div></div>`:""}
+ ${c.errori.length||L.some(y=>!y.controllo.ok)?errBox(c):""}
+ <div class="hero">
+  <div class="tile"><span class="l">Lordo · ${MESE_L(x.periodo)}</span><span class="v">${fmt(d.lordo)}</span><span class="s">pagato il ${dIt(x.dataPagamento)||"—"}${Math.abs(d.lordo-(h.totaleCompetenze??d.lordo))>0.005?" · sul cedolino "+fmt(h.totaleCompetenze)+" (TFR già sottratto)":""}</span></div>
+  <div class="tile"><span class="l">Contributi, TFR, ONAOSI</span><span class="v">${fmt(d.contributi)}</span><span class="s">${d.lordo?fmt(d.contributi/d.lordo,"pct"):""} del lordo</span></div>
+  <div class="tile t-tax"><span class="l">IRPEF e imposte</span><span class="v">${fmt(d.tasse)}</span><span class="s">IRPEF ${fmt(d.irpef)}${d.sost?" · sostitutiva "+fmt(d.sost):""}${d.add?" · addizionali "+fmt(d.add):""}</span></div>
+  <div class="tile t-liq"><span class="l">Netto in busta</span><span class="v">${fmt(d.netto)}</span><span class="s">${d.lordo?Math.round(d.netto/d.lordo*100)+"% del lordo":""}</span></div>
+ </div>
+ <div class="grid">
+  <div class="box"><h3>Voci del cedolino di ${MESE_L(x.periodo)}</h3><div class="tbl-wrap flat"><table class="scad2 ced-det"><tbody>${det}</tbody></table></div></div>
+  <div class="box ${x.controllo.ok?"c-good":"c-tax"}"><h3>Controlli</h3>${chk.map(t=>`<p class="note">${t}</p>`).join("")}</div>
+ </div>
+ <div class="box"><h3>Storico</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Pagato il</th><th>Lordo</th><th>Contributi</th><th>Imposte</th><th>Netto</th><th>Netto / lordo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  <p class="note">Tocca un mese per vederne le voci. Lo stipendio netto di ogni cedolino verificato è già in Entrate, nel mese di pagamento.</p></div>
+</section>`;};
+function errBox(c){const bad=(c.lista||[]).filter(y=>!y.controllo.ok);
+ return `<div class="box c-tax"><h3>Da controllare</h3>${bad.map(y=>`<p class="note"><b>${esc(y.file)}</b> (${MESE_L(y.periodo)}): il netto ricostruito non torna con quello stampato, quindi lo stipendio di quel mese resta manuale in Entrate.</p>`).join("")}
+  ${c.errori.map(e=>`<p class="note"><b>${esc(e.file)}</b>: non leggibile (${esc(e.errore)}). Controlla che sia il PDF originale scaricato dal portale.</p>`).join("")}</div>`;}
+view.addEventListener("click",async e=>{const b=e.target.closest("[data-act='ced-sel'],[data-act='x-ced-ok']");if(!b)return;
+ if(b.dataset.act==="ced-sel"){CED_SEL=b.dataset.file;render();const t=document.querySelector(".ced-det");if(t)t.closest(".box").scrollIntoView({behavior:"smooth",block:"start"});return;}
+ e.preventDefault();if(READONLY)return;
+ const voci=[...document.querySelectorAll("#ced-nuove .ced-nv")].map(tr=>({codice:tr.dataset.cod,descrizione:tr.dataset.desc,categoria:tr.querySelector(".ced-cat").value,tipo:tr.querySelector(".ced-tipo").value}));
+ if(!voci.length)return;b.disabled=true;linkMsg("ced","Invio la classificazione al PC…");
+ try{const r=await hubFetch("/api/cedolini/classifica",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({voci})});
+  if(applyCed(r))scheduleSave();linkMsg("ced","Classificazione salvata: i cedolini sono stati riletti.");render();}
+ catch(err){linkMsg("ced","Classificazione non salvata: "+err.message+".");b.disabled=false;}});
+view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-act='ced-sel']");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();r.click();}});
+
 /* ================= avvio ================= */
 (function init(){
  const raw=lsGet(LS_KEY);
@@ -1146,11 +1289,11 @@ view.addEventListener("submit",async e=>{if(e.target.id!=="lk-hub-form")return;e
  else{S=load(null);status("busy","Nessun dato: importa o ripristina un backup");}
  render();refreshLinks();
  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
- setTimeout(()=>{sondSync(false);hubSync(false);},1200);
- document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);hubSync(false);}
+ setTimeout(()=>{sondSync(false);cedSync(false);hubSync(false);},1200);
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);hubSync(false);}
   else if(dirty)save();});
  window.addEventListener("pagehide",()=>{if(dirty)save();});
- window.addEventListener("online",()=>{sondSync(false);hubSync(false);});
+ window.addEventListener("online",()=>{sondSync(false);cedSync(false);hubSync(false);});
  window.addEventListener("storage",e=>{
   if(e.key===SOND_LS_KEY)sondSync(false);
   else if(e.key===LS_KEY&&e.newValue&&!dirty){try{S=load(JSON.parse(e.newValue));afterExternalChange();}catch(_){}}});
