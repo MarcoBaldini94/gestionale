@@ -11,7 +11,7 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - `index.html` — scheletro (header, tabs, `#view`), registra `sw.js`.
 - `app.js` — tutta la logica in un IIFE: modello dati v3 (`defaults/migrate/sanitize/load`), calcoli (`calc`), viste `V.<scheda>`, binding input `data-i` (percorsi in `S`) e output `data-o` (percorsi in `R`), poi in fondo il livello di salvataggio/collegamenti (sezione "salvataggio sul dispositivo").
 - `styles.css` — font locali + stili dell'artefatto + sezione finale "webapp".
-- `sw.js` — rete prima, cache se offline. Cache con prefisso `gestionale-`; all'activate cancella SOLO cache `gestionale-*` e le vecchie `bilancio-*` (stessa origine condivisa con altre app). **A ogni modifica aumentare `VERSION`.**
+- `sw.js` — rete prima, cache se offline. Cache con prefisso `gestionale-`; all'activate cancella SOLO cache `gestionale-*` e le vecchie `bilancio-*` (stessa origine condivisa con altre app). **A ogni modifica aumentare `VERSION` e il `?v=` di `app.js`/`styles.css` in `index.html`** (le fetch del SW usano `cache:"no-cache"`, così index.html e app.js non restano disallineati per la cache HTTP di GitHub Pages, max-age=600).
 - `manifest.webmanifest`, `icons/`, `fonts/` (OFL).
 
 ## Dati e backup

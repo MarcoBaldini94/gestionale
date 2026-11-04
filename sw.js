@@ -1,6 +1,6 @@
 // Service worker: rete prima (così gli aggiornamenti arrivano subito), cache se offline.
 // Aumenta VERSION a ogni modifica dei file per aggiornare la cache.
-const VERSION = "v9";
+const VERSION = "v10";
 const CACHE = "gestionale-" + VERSION;
 const FILES = ["./", "index.html", "styles.css", "app.js", "app.webmanifest",
   "fonts/BricolageGrotesque.woff2", "fonts/IBMPlexSans-400.woff2", "fonts/IBMPlexSans-500.woff2", "fonts/IBMPlexSans-600.woff2",
@@ -20,8 +20,11 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET" || u.origin !== location.origin || !u.pathname.startsWith(new URL("./", self.registration.scope).pathname)) return;
+  // cache:"no-cache" = chiede sempre al server se il file è cambiato (GitHub Pages manda max-age=600:
+  // senza, il browser poteva dare index.html nuovo con app.js vecchio per 10 minuti)
+  const req = e.request.mode === "navigate" ? new Request(e.request.url, { cache: "no-cache", credentials: "same-origin" }) : new Request(e.request, { cache: "no-cache" });
   e.respondWith(
-    fetch(e.request)
+    fetch(req)
       .then(r => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); } return r; })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match("index.html")))
   );
