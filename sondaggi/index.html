@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Guadagni sondaggi</title>
+<meta name="description" content="Tracker personale dei guadagni sui portali di sondaggi retribuiti">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161B22" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../icons/icon48.png">
+<script>/* tema scelto nel Gestionale (pulsante ☾/☀): stessa chiave, aggiornato anche dal vivo */
+(function(){function ap(){try{var t=localStorage.getItem("gestionale-tema");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);else document.documentElement.removeAttribute("data-theme");}catch(e){}}
+ap();window.addEventListener("storage",function(e){if(e.key==="gestionale-tema")ap();});window.gestionaleTema=ap;})();</script>
+<link rel="stylesheet" href="styles.css?v=11">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Guadagni sondaggi</h1>
+      <div class="month">
+        <button class="nav" id="prev" aria-label="Mese precedente">‹</button>
+        <div class="month-name" id="monthName" aria-live="polite">—</div>
+        <button class="nav" id="next" aria-label="Mese successivo">›</button>
+      </div>
+      <div class="status" id="status">Caricamento…</div>
+    </div>
+    <div class="month-tot">
+      <div><span>Guadagnato nel mese</span><strong class="earn" id="mG">—</strong></div>
+      <div><span>Prelevato nel mese</span><strong class="out" id="mP">—</strong></div>
+    </div>
+  </header>
+
+  <section class="sites" id="sites" aria-label="Piattaforme"></section>
+
+  <section class="summary">
+    <div class="sum-head">
+      <h2>Riepilogo</h2>
+      <label>Periodo
+        <select id="yearSel"></select>
+      </label>
+    </div>
+    <div class="totals">
+      <div><span>Totale guadagnato</span><strong class="earn" id="tG">—</strong></div>
+      <div><span>Totale prelevato</span><strong class="out" id="tP">—</strong></div>
+      <div><span>Differenza</span><strong id="tD">—</strong><small>guadagnato − prelevato</small></div>
+      <div><span>In attesa di approvazione</span><strong class="wait" id="tW">—</strong><small id="tWn">non incluso nei totali</small></div>
+    </div>
+
+    <div class="panel">
+      <h3>Guadagni e prelievi per mese</h3>
+      <div class="legend"><span><i style="background:var(--earn)"></i>Guadagni</span><span><i style="background:var(--out)"></i>Prelievi</span></div>
+      <div class="chart" id="chart"><div class="tip" id="tip"></div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Dettaglio mensile</h3>
+      <div class="scroll"><table id="monthTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <h3>Per piattaforma</h3>
+      <div class="scroll"><table id="siteTable"></table></div>
+    </div>
+
+    <details class="bulk" id="bulk">
+      <summary>Inserisci i mesi passati</summary>
+      <p class="bulk-intro">Scrivi i totali di ogni mese così come li ricordi. Ogni valore si salva appena lasci la casella e sostituisce quello già presente; una casella vuota vale zero.</p>
+      <div class="bulk-ctrl">
+        <label>Dal mese <input type="month" id="bulkFrom"></label>
+        <label>al mese <input type="month" id="bulkTo"></label>
+      </div>
+      <div class="scroll" id="bulkTableWrap"><table id="bulkTable"></table></div>
+      <div class="bulk-cards" id="bulkCards" hidden></div>
+    </details>
+
+    <div class="tools">
+      <button class="btn" id="exportBtn">Scarica backup</button>
+      <label class="btn" for="importFile" style="cursor:pointer">Importa backup</label>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <span id="toolMsg"></span>
+    </div>
+
+    <details class="bulk hub" id="hubBox">
+      <summary>Backup automatico sul PC <span class="hub-badge" id="hubBadge"></span></summary>
+      <p class="bulk-intro">Dopo ogni modifica l'app invia una copia dei dati al PC di casa tramite Tailscale. Se il PC non è raggiungibile riprova da sola alla prossima apertura. Le copie finiscono nella cartella <em>backup</em> del progetto su OneDrive.</p>
+      <div class="hub-row">
+        <label for="hubUrl">Indirizzo del PC</label>
+        <input id="hubUrl" type="url" inputmode="url" placeholder="https://nome-pc.xxxx.ts.net:8443" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="hub-actions">
+        <button class="btn" id="hubSave" type="button">Salva e prova</button>
+        <button class="btn" id="hubNow" type="button">Invia backup ora</button>
+        <button class="btn ghost" id="hubRestore" type="button">Ripristina dal PC</button>
+      </div>
+      <p class="hub-status" id="hubStatus" role="status"></p>
+    </details>
+  </section>
+</div>
+
+<script src="app.js?v=11"></script>
+</body>
+</html>

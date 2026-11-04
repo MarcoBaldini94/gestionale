@@ -41,16 +41,17 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - Ogni sezione ha una dashboard con lo stesso schema di Finanze (box `pcard`: ciambella principale + sotto-schede `a.psub` che si aprono al primo tocco e portano alla scheda al secondo):
   - Finanze `#dashboard` → patrimonio, scadenzario, entrate, tasse, andamento, mese, parametri (invariata).
   - Lavoro `#lavoro` → `#presenze` (ore, recupero, ferie, mesi, giorni), `#lv-pag` (guardie, aggiuntiva, pagamenti), `#cedolini`.
-  - Sondaggi `#sondaggi` (due ciambelle guadagni/prelievi dell'anno per piattaforma, area ∝ totale, legenda comune; colonne guadagni vs prelievi ultimi 12 mesi) → `#sond-mese` «Mese corrente» (solo guadagni per mese e piattaforma, mese scelto con frecce o selettore; aggiunta/rimozione piattaforme), `#sond-attesa` «In attesa di approvazione» (unico punto per importi in attesa: aggiungi con piattaforma, conferma → guadagni del mese scelto, rimuovi), `#sond-saldo` «Saldo sui portali» (saldo = Σg − Σp di sempre per piattaforma; prelievi del mese con frecce/selettore), `#sond-storico` (sola lettura: grafico per anno, tabelle guadagni/prelievi).
+  - Sondaggi `#sondaggi`: niente dashboard propria, mostra l'app Guadagni sondaggi originale (vedi sotto).
 - `PARENT`/`parentOf()`: il pulsante ‹ torna alla dashboard della sezione; `body[data-sez]` colora la barra.
 - `donut(…, fv)` e `li(…, fv)` accettano un formattatore (ore, giorni) e colori esadecimali.
 
-## Sezione Sondaggi (ex app Guadagni sondaggi, portata dentro)
-- Dati in localStorage `survey-earnings-tracker-v1`, stesso formato dell'app Guadagni (centesimi). Stato in memoria `SV` (`svLoad`, `svSave`, `sondClean` con chiavi ordinate).
-- `svSave`: salva, aggiorna Entrate › Sondaggi (`applySond`), backup sul PC 8 s dopo (`POST /api/guadagni/backup`, stato in `gestionale-sond-hub` con `lastSig`).
-- `sondSync`: se sul PC c'è un backup più recente e diverso da quello inviato da qui (es. vecchia app), lo adotta come dato locale.
-- Collegamenti › Sondaggi: aggiorna, backup ora, ripristina dal PC, scarica/importa file (compatibile con l'app Guadagni).
-- La vecchia app Guadagni sondaggi è da dismettere.
+## Sezione Sondaggi (dal 04/11/2026 sera: copia esatta dell'app Guadagni sondaggi)
+- Su richiesta di Marco la sezione ha **esattamente l'aspetto della vecchia app**: i file della vecchia app (`Survey checker - Chrome extention/App guadagni survey`: `index.html`, `styles.css`, `app.js`, `fonts/SchibstedGrotesk.woff2`) sono copiati in `sondaggi/` e `V.sondaggi` li mostra in un iframe (`#sv-frame`) a tutta larghezza, alto quanto il contenuto (`svFrameFit` + ResizeObserver). `render()` non ricrea l'iframe se è già aperto.
+- Modifiche alla copia: tolta la registrazione del suo `sw.js` (usa quello del Gestionale), tolti manifest/icone, aggiunto in `<head>` lo script che applica `gestionale-tema` (anche dal vivo con l'evento `storage`), `?v=` su CSS/JS. Il resto è identico: se si modifica l'app sondaggi, si lavora in `sondaggi/`.
+- Dati: stessa chiave `survey-earnings-tracker-v1` (centesimi). La copia fa il suo backup Hub (app `guadagni`, stato `hub-stato`, URL `hub-url` condiviso); il Gestionale continua a leggere la chiave: evento `storage` → `svLoad` + `applySond` (Entrate › Sondaggi = Σ prelievi del mese), `sondSync` adotta un backup del PC più recente.
+- `svSave`/`svHubSync`/`svReplace` restano per Collegamenti › Sondaggi (backup ora, ripristina, importa/scarica).
+- Sfondo della pagina sulla sezione = sfondo dell'app sondaggi (`body[data-sez="sondaggi"]`, chiaro `#EEF1F4`, scuro `#161B22`).
+- La vecchia app pubblicata a parte è da dismettere.
 
 ## Scheda «Presenze e ferie» / «Guardie e aggiuntiva» — cartellini presenze
 - Primo modulo dell'app multifunzione (decisione 04/11/2026: un'unica PWA a moduli Bilancio · Lavoro · Sondaggi).
