@@ -36,7 +36,23 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - Voci con `tariffa` e `quantita` quando stampate (es. guardia 8,3333 × 48 h): servono alla scheda Lavoro.
 - Da fare: proiezione IRPEF dell'anno (conguaglio, addizionali).
 
-## Scheda «Lavoro» (`#lavoro`, pill «◷ Lavoro» in header) — cartellini presenze
+## Struttura a tre sezioni (dal 04/11/2026)
+- `#home`: tre nodi collegati come l'icona (Lavoro verde acqua, Finanze terracotta, Sondaggi bianco) con un dato chiave ciascuno. Il logo in header riporta alla home.
+- Ogni sezione ha una dashboard con lo stesso schema di Finanze (box `pcard`: ciambella principale + sotto-schede `a.psub` che si aprono al primo tocco e portano alla scheda al secondo):
+  - Finanze `#dashboard` → patrimonio, scadenzario, entrate, tasse, andamento, mese, parametri (invariata).
+  - Lavoro `#lavoro` → `#presenze` (ore, recupero, ferie, mesi, giorni), `#lv-pag` (guardie, aggiuntiva, pagamenti), `#cedolini`.
+  - Sondaggi `#sondaggi` → `#sond-mese` (inserimento del mese, in attesa, piattaforme), `#sond-storico` (grafico, tabelle, mesi passati).
+- `PARENT`/`parentOf()`: il pulsante ‹ torna alla dashboard della sezione; `body[data-sez]` colora la barra.
+- `donut(…, fv)` e `li(…, fv)` accettano un formattatore (ore, giorni) e colori esadecimali.
+
+## Sezione Sondaggi (ex app Guadagni sondaggi, portata dentro)
+- Dati in localStorage `survey-earnings-tracker-v1`, stesso formato dell'app Guadagni (centesimi). Stato in memoria `SV` (`svLoad`, `svSave`, `sondClean` con chiavi ordinate).
+- `svSave`: salva, aggiorna Entrate › Sondaggi (`applySond`), backup sul PC 8 s dopo (`POST /api/guadagni/backup`, stato in `gestionale-sond-hub` con `lastSig`).
+- `sondSync`: se sul PC c'è un backup più recente e diverso da quello inviato da qui (es. vecchia app), lo adotta come dato locale.
+- Collegamenti › Sondaggi: aggiorna, backup ora, ripristina dal PC, scarica/importa file (compatibile con l'app Guadagni).
+- La vecchia app Guadagni sondaggi è da dismettere.
+
+## Scheda «Presenze e ferie» / «Guardie e aggiuntiva» — cartellini presenze
 - Primo modulo dell'app multifunzione (decisione 04/11/2026: un'unica PWA a moduli Bilancio · Lavoro · Sondaggi).
 - PDF in OneDrive «Assistente Finanziario/Cartellini/<anno>/». L'Hub (`cartellini_hub.py`, `parser_cartellini.py`) pubblica `GET /api/cartellini/archivio`, `POST /api/cartellini/aggiorna`.
 - `S.cart = {agg, lista, errori}`: un cartellino per mese (ricalcolo più recente), compattato da `cleanCart` (giorni `{g,dow,orario,t:[[e,u,o|a]],c:[[codice,minuti]],tc,ec}`, ore in minuti, ferie, totalizzatori gettone notturna/festiva, aggiuntiva = Σ causale 000038, notti, festive, giorni di ferie). Nessun dato anagrafico.

@@ -311,7 +311,13 @@ const ICO={
  trend:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>'};
 
 /* ================= schede ================= */
-const TABS=[["dashboard","Dashboard"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],["cedolini","Cedolini"],["lavoro","Lavoro"],["collegamenti","Collegamenti e backup"]];
+const TABS=[["home","Home"],["dashboard","Finanze"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],
+ ["lavoro","Lavoro"],["presenze","Presenze e ferie"],["lv-pag","Guardie e aggiuntiva"],["cedolini","Cedolini"],
+ ["sondaggi","Sondaggi"],["sond-mese","Inserimento"],["sond-storico","Storico"],["collegamenti","Collegamenti e backup"]];
+/* tre sezioni (Lavoro, Finanze, Sondaggi), ognuna con la sua dashboard; ogni scheda torna alla dashboard della sua sezione */
+const DASHES=["dashboard","lavoro","sondaggi"];
+const PARENT={dashboard:"home",lavoro:"home",sondaggi:"home",collegamenti:"home",presenze:"lavoro","lv-pag":"lavoro",cedolini:"lavoro","sond-mese":"sondaggi","sond-storico":"sondaggi"};
+const parentOf=t=>PARENT[t]||(t==="home"?null:"dashboard");
 const V={};
 
 V.dashboard=()=>{const PY=R.PY,TY=R.TY,c=`anni.${TY}`,pv=`anni.${TY-1}`;return `
@@ -394,11 +400,11 @@ V.scadenzario=()=>{
 
 /* ciambelle e legende condivise (Dashboard, Resoconto mensile, Entrate) */
 const pc=(v,t)=>t?Math.round(v/t*100)+"%":"—";
-const col=c=>c==="taxh"?"url(#hatch-pc)":`var(--${c})`;
-const donut=(segs0,sz,sw,label,center,cval,clab="totale")=>{const segs=segs0.filter(x=>x[1]>0),tot=sum(segs.map(x=>x[1])),r=(sz-sw)/2,C=2*Math.PI*r;let off=0;
-  const arcs=segs.map(([l,v,c])=>{const len=v/tot*C,gap=segs.length>1?1.5:0,o=`<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${col(c)}" stroke-width="${sw}" stroke-dasharray="${Math.max(len-gap,0).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${sz/2} ${sz/2})"><title>${l}: ${fmt(v)} (${pc(v,tot)})</title></circle>`;off+=len;return o;}).join("");
-  return `<svg viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" role="img" aria-label="${label}" class="dn">${center===true?`<defs><pattern id="hatch-pc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--c-liq)"/><rect width="3.2" height="6" fill="var(--c-tasse)"/></pattern></defs>`:""}<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>${arcs}${center?`<text x="50%" y="${sz/2-2}" text-anchor="middle" class="pc1" style="font-size:${sz>140?17:13}px">${(cval!=null?cval:tot)?fmt(Math.round(cval!=null?cval:tot)).replace(/,\d\d(?=\s|$)/,""):"—"}</text><text x="50%" y="${sz/2+(sz>140?15:13)}" text-anchor="middle" class="pc2" style="font-size:${sz>140?11:10}px">${clab}</text>`:""}</svg>`;};
-const li=(c,l,v,t)=>{const k=c==="taxh"?"tasse":c.replace(/^c-/,"");return `<li><i style="${c==="taxh"?"background:repeating-linear-gradient(45deg,var(--c-tasse) 0 2.5px,var(--c-liq) 2.5px 5px)":`background:var(--${c})`}"></i><span>${l}</span><b style="color:var(--t-${k},var(--c-${k},var(--fg)))">${fmt(v)}</b><em>${pc(v,t)}</em></li>`;};
+const col=c=>c==="taxh"?"url(#hatch-pc)":c[0]==="#"?c:`var(--${c})`;
+const donut=(segs0,sz,sw,label,center,cval,clab="totale",fv=null)=>{const F=fv||fmt;const segs=segs0.filter(x=>x[1]>0),tot=sum(segs.map(x=>x[1])),r=(sz-sw)/2,C=2*Math.PI*r;let off=0;
+  const arcs=segs.map(([l,v,c])=>{const len=v/tot*C,gap=segs.length>1?1.5:0,o=`<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${col(c)}" stroke-width="${sw}" stroke-dasharray="${Math.max(len-gap,0).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${sz/2} ${sz/2})"><title>${l}: ${F(v)} (${pc(v,tot)})</title></circle>`;off+=len;return o;}).join("");
+  return `<svg viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" role="img" aria-label="${label}" class="dn">${center===true?`<defs><pattern id="hatch-pc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--c-liq)"/><rect width="3.2" height="6" fill="var(--c-tasse)"/></pattern></defs>`:""}<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>${arcs}${center?`<text x="50%" y="${sz/2-2}" text-anchor="middle" class="pc1" style="font-size:${sz>140?17:13}px">${(cval!=null?cval:tot)?(fv?fv(cval!=null?cval:tot):fmt(Math.round(cval!=null?cval:tot)).replace(/,\d\d(?=\s|$)/,"")):"—"}</text><text x="50%" y="${sz/2+(sz>140?15:13)}" text-anchor="middle" class="pc2" style="font-size:${sz>140?11:10}px">${clab}</text>`:""}</svg>`;};
+const li=(c,l,v,t,fv)=>{const k=c==="taxh"?"tasse":c.replace(/^c-/,""),hx=c[0]==="#";return `<li><i style="${c==="taxh"?"background:repeating-linear-gradient(45deg,var(--c-tasse) 0 2.5px,var(--c-liq) 2.5px 5px)":hx?`background:${c}`:`background:var(--${c})`}"></i><span>${l}</span><b style="${hx?"color:var(--fg)":`color:var(--t-${k},var(--c-${k},var(--fg)))`}">${(fv||fmt)(v)}</b><em>${pc(v,t)}</em></li>`;};
 function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  if(!(L>=0))return `<div class="box pcard"><h3>Composizione del patrimonio</h3><p class="muted">Nessun mese compilato nel ${Y}.</p></div>`;
  const g=k=>+(getP(S,`patrimonio.${Y}.${L}.${k}`)||0),lq=g("fineco")+g("revolut"),iv=g("fondo")+g("etf");
@@ -842,8 +848,10 @@ function chart(){
 /* ================= rendering e binding ================= */
 let current="dashboard";
 function renderTabs(){const n=document.querySelector("nav.tabs"),t=document.getElementById("tabs"),par=document.getElementById("hdr-par");
- n.hidden=current==="dashboard";if(par)par.hidden=current==="parametri";{const sy=document.getElementById("hdr-sync");if(sy)sy.hidden=current==="collegamenti";}
- t.innerHTML=current==="dashboard"?"":`<a class="back" href="#dashboard" id="back" aria-label="Torna alla dashboard"><span aria-hidden="true">‹</span> Dashboard</a><span class="crumb">${(TABS.find(x=>x[0]===current)||[])[1]||""}</span>`;}
+ const pa=parentOf(current),lbl=k=>(TABS.find(x=>x[0]===k)||[])[1]||"";
+ n.hidden=current==="home";if(par)par.hidden=parentOf(current)!=="dashboard"&&current!=="dashboard";{const sy=document.getElementById("hdr-sync");if(sy)sy.hidden=current==="collegamenti";}
+ document.body.dataset.sez=current==="home"?"home":current==="collegamenti"?"":(DASHES.includes(current)?current:pa);
+ t.innerHTML=current==="home"?"":`<a class="back" href="#${pa}" id="back" aria-label="Torna a ${lbl(pa)}"><span aria-hidden="true">‹</span> ${lbl(pa)}</a><span class="crumb">${lbl(current)}</span>`;}
 function fillInputs(force){
  document.querySelectorAll("#view [data-i]").forEach(el=>{
   if(!force&&el===document.activeElement)return;
@@ -871,7 +879,7 @@ function updateOutputs(){
 }
 function render(){
  TODAY=new Date().toLocaleDateString("sv-SE");
- const h=(location.hash||"").slice(1);current=TABS.some(t=>t[0]===h)?h:"dashboard";
+ const h=(location.hash||"").slice(1).split("?")[0];current=TABS.some(t=>t[0]===h)?h:"home";
  R=calc(S);if(UY==null||!allYears().includes(UY))UY=R.PY;
  renderTabs();document.getElementById("view").innerHTML=V[current]();psubInit();fillInputs(true);updateOutputs();
 }
@@ -884,7 +892,7 @@ function psubInit(){document.querySelectorAll("#view a.psub").forEach(el=>{const
   r.innerHTML=`${c?`<span class="psum"${col?` style="color:${col}"`:""}>${c.textContent}</span>`:""}<span class="chev" data-act="ptog" role="button" aria-label="Apri o chiudi">›</span>`;h.appendChild(r);
   const t=document.createElement("span");t.className="phint";t.textContent="Tocca di nuovo per aprire la scheda ›";el.appendChild(t);});}
 let GOTO=null;
-function landGoto(){const g=GOTO;GOTO=null;if(!g){if(current==="dashboard"&&DASH_Y!=null){const y=DASH_Y;DASH_Y=null;requestAnimationFrame(()=>window.scrollTo(0,y));}else window.scrollTo(0,0);return;}
+function landGoto(){const g=GOTO;GOTO=null;if(!g){if((DASHES.includes(current)||current==="home")&&DASH_Y!=null){const y=DASH_Y;DASH_Y=null;requestAnimationFrame(()=>window.scrollTo(0,y));}else window.scrollTo(0,0);return;}
  requestAnimationFrame(()=>{let t=null,fl=[];
   if(g.ym){t=document.querySelector(`.mcard[data-ym="${g.ym}"]`)||document.querySelector(".mgrid");}
   else if(g.to)t=document.getElementById(g.to);
@@ -898,14 +906,17 @@ function go(b){const d=b.dataset;
  if(d.tpy)TPY=String(d.tpy);
  if(d.mm)MM=d.mm;
  if(d.uy)UY=+d.uy;
+ if(d.svm)SV_CUR=d.svm;
  GOTO={ym:d.ym,to:d.to,pt:d.pt};
- if((location.hash||"#dashboard").slice(1)===d.tab){render();landGoto();}else location.hash=d.tab;}
+ if((location.hash||"#home").slice(1)===d.tab){render();landGoto();}else location.hash=d.tab;}
 /* navigazione: la dashboard è la home; dalle schede si torna indietro col pulsante «‹ Dashboard» (o col tasto indietro del telefono) */
-let FROM=null,DASH_Y=null;
-window.addEventListener("hashchange",e=>{let old="dashboard";try{old=(new URL(e.oldURL).hash||"#dashboard").slice(1)||"dashboard";}catch(_){}
- FROM=old;if(old==="dashboard")DASH_Y=window.scrollY;render();landGoto();});
+let FROM=null,DASH_Y=null;const DASH_YS={};
+window.addEventListener("hashchange",e=>{let old="home";try{old=(new URL(e.oldURL).hash||"#home").slice(1)||"home";}catch(_){}
+ FROM=old;if(DASHES.includes(old)||old==="home")DASH_YS[old]=window.scrollY;
+ const cur=(location.hash||"#home").slice(1);if((DASHES.includes(cur)||cur==="home")&&parentOf(old)===cur)DASH_Y=DASH_YS[cur]??null;else DASH_Y=null;
+ render();landGoto();});
 document.getElementById("tabs").addEventListener("click",e=>{if(!e.target.closest("#back"))return;e.preventDefault();
- if(FROM==="dashboard"&&history.length>1)history.back();else location.hash="dashboard";});
+ const pa=parentOf(current)||"home";if(FROM===pa&&history.length>1)history.back();else location.hash=pa;});
 const view=document.getElementById("view");
 view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr.lk");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();go(r);}});
 view.addEventListener("change",e=>{if(e.target.id==="mm-sel"){MM=e.target.value;render();const s2=document.getElementById("mm-sel");if(s2)s2.focus();}});
@@ -1042,11 +1053,11 @@ function sondState(){return lsJSON(SOND_STATE_KEY)}
 function setSondState(o){lsSet(SOND_STATE_KEY,JSON.stringify(Object.assign(sondState(),o)))}
 const sondCovers=ym=>!!(S.sondExt&&ym>=S.sondExt.da&&ym<=S.sondExt.a);
 function readSondLocal(){const raw=lsGet(SOND_LS_KEY);if(!raw)return null;
- try{const d=JSON.parse(raw);return d&&d.months&&typeof d.months==="object"?{months:d.months,t:Date.parse(d.updatedAt)||0,fonte:"locale"}:null}catch(e){return null}}
+ try{const d=JSON.parse(raw);return d&&d.months&&typeof d.months==="object"?{months:d.months,t:Date.parse(d.updatedAt)||0,fonte:"locale",dati:d}:null}catch(e){return null}}
 async function readSondHub(){const r=await hubFetch("/api/guadagni/backup/ultimo");
  const m=/(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})/.exec((r&&r.file)||"");
  const t=m?new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6]).getTime():0;
- return r&&r.dati&&r.dati.months&&typeof r.dati.months==="object"?{months:r.dati.months,t,fonte:"hub"}:null;}
+ return r&&r.dati&&r.dati.months&&typeof r.dati.months==="object"?{months:r.dati.months,t,fonte:"hub",dati:r.dati,file:r.file}:null;}
 function sondTotals(months){const tot={};
  for(const [ym,row] of Object.entries(months)){if(!/^\d{4}-\d{2}$/.test(ym)||!row||typeof row!=="object")continue;
   let c=0;for(const v of Object.values(row))c+=Math.round(+((v&&v.p)||0))||0;tot[ym]=c;}
@@ -1071,15 +1082,17 @@ function afterExternalChange(){const a=document.activeElement;
 view.addEventListener("focusout",()=>{if(pendingRender){pendingRender=false;setTimeout(()=>{const a=document.activeElement;if(!(a&&view.contains(a)&&a.matches("input,select,textarea")))render();else pendingRender=true;},0);}});
 async function sondSync(manual){
  if(sondBusy)return;
- if(!hasRealData(S)){if(manual)linkMsg("sond","Prima importa o ripristina i dati del bilancio.");return;}
  sondBusy=true;if(manual)linkMsg("sond","Controllo i dati dei sondaggi…");
  try{
   let changed=false,usato=null;
   const loc=readSondLocal();
-  if(loc){changed=applySond(loc)||changed;usato=loc;}
+  if(loc){if(hasRealData(S))changed=applySond(loc)||changed;usato=loc;}
   let hub=null,hubErr="";
   if(hubUrl()){try{hub=await readSondHub();}catch(e){hubErr=e.message;}}
-  if(hub&&(!loc||hub.t>loc.t)){changed=applySond(hub)||changed;usato=hub;}
+  if(hub&&(!loc||hub.t>loc.t)){
+   /* backup sul PC più recente dei dati locali (es. inserito dalla vecchia app o da un altro dispositivo): diventa il dato locale */
+   const nh=sondClean(hub.dati);if(svSig(nh)!==svHubState().lastSig&&(!loc||svSig(nh)!==svSig(sondClean(loc.dati)))){lsSet(SOND_LS_KEY,JSON.stringify(Object.assign(nh,{updatedAt:new Date(hub.t).toISOString()})));svLoad();if(["sondaggi","sond-mese","sond-storico","home"].includes(current))afterExternalChange();}
+   if(hasRealData(S))changed=applySond(hub)||changed;usato=hub;}
   setSondState({check:Date.now(),locT:loc?loc.t:0,hubT:hub?hub.t:0,hubErr,usato:usato?usato.fonte:"",usatoT:usato?usato.t:0});
   if(changed){afterExternalChange();scheduleSave();}
   if(manual)linkMsg("sond",usato?(changed?"Prelievi aggiornati.":"Già aggiornato: nessuna differenza."):"Nessun dato dell'app sondaggi trovato"+(hubErr?" ("+hubErr+")":"")+".");
@@ -1095,10 +1108,10 @@ function hubBadge(){const s=hubState(),url=hubUrl();
  if(!url)return ["off","non attivo"];
  if(s.lastErr&&(!s.lastOk||s.lastErrAt>s.lastOk))return ["warn","PC non raggiungibile"];
  return s.lastOk?["ok","ultimo backup "+fmtWhen(s.lastOk)]:["off","nessun backup ancora"];}
-function sondInfo(){const ss=sondState(),e=S.sondExt;
- const rows=[["Dati su questo dispositivo",ss.locT?"sì, aggiornati "+fmtWhen(ss.locT):"no"],
-  ["Ultimo backup dell'app sondaggi sul PC",!hubUrl()?"Hub non configurato":ss.hubErr?"non raggiungibile ("+ss.hubErr+")":ss.hubT?fmtWhen(ss.hubT):"—"],
-  ["Fonte usata",e?(e.fonte==="hub"?"backup sul PC":"questo dispositivo")+" · aggiornato "+fmtWhen(Date.parse(e.agg)):"—"],
+function sondInfo(){const ss=sondState(),e=S.sondExt,hs=svHubState();
+ const rows=[["Dati su questo dispositivo",ss.locT?"aggiornati "+fmtWhen(ss.locT):"nessuno"],
+  ["Ultimo backup dei sondaggi sul PC",!hubUrl()?"Hub non configurato":ss.hubErr?"non raggiungibile ("+ss.hubErr+")":ss.hubT?fmtWhen(ss.hubT):"—"],
+  ["Ultimo invio da qui",hs.lastErr&&(!hs.lastOk||hs.lastErrAt>hs.lastOk)?"non riuscito ("+esc(hs.lastErr)+")":hs.lastOk?fmtWhen(hs.lastOk):"—"],
   ["Mesi automatici",e?"da "+MESE_L(e.da)+" a "+MESE_L(e.a):"nessuno (ancora inserimento manuale)"],
   ["Ultimo controllo",fmtWhen(ss.check)]];
  return rows.map(([a,b])=>`<dt>${a}</dt><dd class="txtv">${b}</dd>`).join("");}
@@ -1111,14 +1124,15 @@ function refreshLinks(){
  const ki=document.getElementById("lk-cart-info");if(ki)ki.innerHTML=cartInfo();}
 V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
  return `<section class="sheet">
- <div class="sheet-h"><h2>Collegamenti e backup</h2><p>I dati stanno in questo browser. Ogni modifica viene copiata sul PC di casa tramite l'Hub (Tailscale); i prelievi dei sondaggi arrivano da soli dall'app Guadagni sondaggi.</p></div>
+ <div class="sheet-h"><h2>Collegamenti e backup</h2><p>I dati stanno in questo browser. Ogni modifica viene copiata sul PC di casa tramite l'Hub (Tailscale). Su un telefono o un browser nuovo: imposta l'indirizzo dell'Hub e ripristina finanze e sondaggi dal PC.</p></div>
  <div class="grid">
- <div class="box c-good"><h3>App Guadagni sondaggi</h3>
+ <div class="box c-good"><h3>Sondaggi</h3>
   <dl class="kv" id="lk-sond-info">${sondInfo()}</dl>
   ${T?`<dl class="kv">${kv("Prelievi sondaggi "+Y,out(`anni.${Y}.tot.sond`))}</dl>`:""}
-  <div class="actions"><button class="btn" data-act="x-sond">Aggiorna ora</button><a class="btn ghost" href="https://marcobaldini94.github.io/guadagni-sondaggi/">Apri l'app sondaggi</a></div>
+  <div class="actions"><button class="btn" data-act="x-sond">Aggiorna ora</button><button class="btn ghost" data-act="x-sond-bk">Backup ora</button><button class="btn ghost" data-act="x-sond-rs">Ripristina dal PC</button></div>
+  <div class="actions"><button class="btn ghost" data-act="x-sond-exp">Scarica backup sondaggi</button><label class="btn ghost" for="lk-sond-imp">Importa backup sondaggi…</label><input type="file" id="lk-sond-imp" accept="application/json,.json" hidden></div>
   <p class="note" id="lk-sond-msg" ${linkMsgs.sond?"":"hidden"}>${linkMsgs.sond}</p>
-  <p class="note">Da ${S.sondExt?MESE_L(S.sondExt.da):"il primo mese presente nell'app sondaggi"} in poi la colonna Sondaggi delle Entrate è calcolata: somma dei prelievi del mese su tutti i portali (criterio di cassa). I mesi precedenti restano quelli inseriti a mano. Il controllo avviene all'apertura dell'app e ogni volta che torni su questa finestra.</p></div>
+  <p class="note">I sondaggi si gestiscono qui, nella sezione <a href="#sondaggi">Sondaggi</a> (stesso formato dell'ex app Guadagni). Ogni modifica va sul PC (Hub, cartella dei backup dei sondaggi) e i prelievi di ogni mese entrano in Entrate › Sondaggi${S.sondExt?" da "+MESE_L(S.sondExt.da):""}. Se sul PC c'è un backup più recente (ad esempio inserito dalla vecchia app), al prossimo controllo viene adottato qui.</p></div>
  <div class="box c-good"><h3>Cedolini</h3>
   <dl class="kv" id="lk-ced-info">${cedInfo()}</dl>
   <div class="actions"><button class="btn" data-act="x-ced">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Apri i cedolini</a></div>
@@ -1146,6 +1160,11 @@ function fromAnyBackup(o){if(o&&o.dati&&typeof o.dati==="object")o=o.dati;if(o&&
  if(!o||typeof o!=="object"||!(o.anni||o.registro||o.parametri))throw new Error("il file non sembra un backup del Gestionale");return o;}
 view.addEventListener("click",async e=>{const b=e.target.closest("[data-act^='x-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
  if(a==="x-sond"){sondSync(true);return;}
+ if(a==="x-sond-bk"){if(!hubUrl()){linkMsg("sond","Inserisci prima l'indirizzo dell'Hub.");return;}svLoad();svHubSync(true);return;}
+ if(a==="x-sond-exp"){svLoad();svExport();return;}
+ if(a==="x-sond-rs"){try{linkMsg("sond","Scarico l'ultimo backup dei sondaggi…");const r=await hubFetch("/api/guadagni/backup/ultimo");if(!r||!r.dati||typeof r.dati.months!=="object")throw new Error("backup non valido");
+   svLoad();if(svReplace(r.dati,"il backup del PC "+(r.file||"")))linkMsg("sond","Sondaggi ripristinati da "+(r.file||"PC")+".");else linkMsg("sond","Ripristino annullato.");render();}
+  catch(err){linkMsg("sond","Ripristino non riuscito: "+err.message+".");}return;}
  if(a==="x-ced"){cedSync(true,true);return;}
  if(a==="x-hub-now"){if(!hubUrl()){linkMsg("hub","Inserisci prima l'indirizzo dell'Hub.");return;}if(!hasRealData(S)){linkMsg("hub","Non c'è ancora niente da salvare.");return;}hubSync(true);return;}
  if(a==="x-hub-restore"){try{linkMsg("hub","Scarico l'ultimo backup…");const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");const o=fromAnyBackup(r);
@@ -1155,6 +1174,9 @@ view.addEventListener("click",async e=>{const b=e.target.closest("[data-act^='x-
  if(a==="x-exp"){const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});const u=URL.createObjectURL(blob),l=document.createElement("a");
   l.href=u;l.download="gestionale-"+new Date().toLocaleDateString("sv-SE")+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);linkMsg("file","File scaricato.");return;}
 });
+view.addEventListener("change",async e=>{if(e.target.id!=="lk-sond-imp")return;const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
+ try{const d=JSON.parse(await f.text());if(!d||typeof d.months!=="object")throw new Error("serve un backup dell'app Guadagni o del Gestionale");svLoad();if(svReplace(d,"«"+f.name+"»"))linkMsg("sond","Sondaggi importati da "+f.name+".");render();}
+ catch(err){linkMsg("sond","File non valido: "+err.message+".");}});
 view.addEventListener("change",async e=>{if(e.target.id!=="lk-imp")return;const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
  try{const o=fromAnyBackup(JSON.parse(await f.text()));
   if(hasRealData(S)&&!confirm("Sostituire tutti i dati di questo dispositivo con «"+f.name+"»?")){linkMsg("file","Importazione annullata.");return;}
@@ -1360,9 +1382,9 @@ function cartUsate(L,y){const i=L.indexOf(y);if(y.recupero==null||y.fatto==null|
  if(base==null)return null;return base+(y.fatto-y.dovuto)-y.recupero;}
 const STATO_L={ok:['ok',"pagato"],pagato:['ok',"pagato"],meno:['',"pagate meno ore"],piu:['',"pagate più ore"],manca:['',"non trovato"],attesa:['',"in arrivo"]};
 let CART_SEL=null;
-V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
- const head=`<div class="sheet-h"><h2>Lavoro</h2><p>Ore, ferie, guardie e attività aggiuntiva dai cartellini presenze nella cartella OneDrive «Assistente Finanziario/Cartellini». La lettura avviene sul PC di casa (Hub); qui arrivano solo orari, causali e totali, senza dati anagrafici.</p></div>
- <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Cedolini</a></div>
+function lavPage(mode){const c=S.cart,L=c?c.lista:[];
+ const head=`<div class="sheet-h"><h2>${mode==="pag"?"Guardie e aggiuntiva":"Presenze e ferie"}</h2><p>${mode==="pag"?"Guardie e attività aggiuntiva dai cartellini, confrontate con quanto pagato nei cedolini. Dati":"Ore, recupero e ferie"} dai cartellini presenze nella cartella OneDrive «Assistente Finanziario/Cartellini». La lettura avviene sul PC di casa (Hub); qui arrivano solo orari, causali e totali, senza dati anagrafici.</p></div>
+ <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button>${mode==="pag"?'<a class="btn ghost" href="#cedolini">Cedolini</a>':'<a class="btn ghost" href="#lv-pag">Guardie e aggiuntiva</a>'}</div>
  <p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>`;
  const errs=c&&(c.errori.length||L.some(x=>!x.ok))?`<div class="box c-tax"><h3>Da controllare</h3>${L.filter(x=>!x.ok).map(x=>`<p class="note"><b>${esc(x.file)}</b> (${MESE_L(x.periodo)}): le somme dei giorni non tornano con i totali stampati. I numeri di questo mese vanno verificati sul PDF.</p>`).join("")}
   ${c.errori.map(e=>`<p class="note"><b>${esc(e.file)}</b>: non leggibile (${esc(e.errore)}).</p>`).join("")}</div>`:"";
@@ -1391,30 +1413,33 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
   const tt=g.t.map(([e,u,k])=>`<span class="${k==="a"?"lv-ta":""}">${e||"?"}–${u||"?"}</span>`).join(" ");
   const we=g.dow==="sab"||g.dow==="dom";
   return `<tr class="${we?"lv-we":""}"><td>${g.g} <small class="muted">${g.dow}</small></td><td class="lv-t">${tt||'<span class="muted">—</span>'}</td><td>${tags.join(" ")}</td><td>${g.tc!=null?hm(g.tc):""}</td><td class="${g.ec>0?"pos":g.ec<0?"neg":""}">${g.ec!=null?hmS(g.ec):""}</td></tr>`;}).join("");
- return `<section class="sheet">${head}${errs}
+ return mode==="pag"?`<section class="sheet">${head}${errs}
  <div class="hero">
-  <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}</span></div>
-  <div class="tile"><span class="l">Recupero ore residuo</span><span class="v">${hm(x.recupero)}</span><span class="s">${(()=>{const i=L.indexOf(x),pr=i>0&&L[i-1].periodo===ymAdd(x.periodo,-1)?L[i-1]:null,u=cartUsate(L,x);return pr&&u!=null?`${hm(pr.recupero)} di ${MESE_L(pr.periodo).toLowerCase().split(" ")[0]} ${hmS(saldo)} saldo${u?" − "+hm(u)+" recuperate":""}`:"a fine "+MESE_L(x.periodo).toLowerCase();})()}</span></div>
-  <div class="tile t-liq"><span class="l">Ferie residue</span><span class="v">${nGg(ferRes)}</span><span class="s">congedo ${fN.format(fer.co.residuo)} · festività soppresse ${fN.format(fer.fs.residuo)}${fer.ap.residuo?" · anni prec. "+fN.format(fer.ap.residuo):""} (a ${MESE_L(last.periodo).toLowerCase()})</span></div>
   <div class="tile t-tax"><span class="l">In arrivo nei prossimi cedolini</span><span class="v">${fmt(totArr)}</span><span class="s">lordo stimato: ${inArrivo.length?inArrivo.map(r=>tipoL[r.tipo].toLowerCase()+" "+MESE_L(r.periodo).slice(0,3).toLowerCase()).join(", "):"niente in sospeso"}</span></div>
  </div>
  ${daVerif.length?`<div class="box c-tax"><h3>Pagamenti da verificare</h3>${daVerif.map(r=>`<p class="note"><b>${tipoL[r.tipo]} di ${MESE_L(r.periodo).toLowerCase()}</b>: ${r.stato==="manca"?`nel cedolino di ${MESE_L(r.atteso).toLowerCase()} non c'è (${hm(Math.round(r.ore*60))} ore dal cartellino).`:`pagate ${fN.format(r.pag.ore)} ore, dal cartellino ne risultano ${fN.format(oreDec(Math.round(r.ore*60)))}.`}</p>`).join("")}</div>`:""}
- <div class="grid">
   <div class="box"><h3>Guardie e aggiuntiva · ${anno}</h3><dl class="kv">
    ${kv("Notti di guardia",String(notti))}${kv("Guardie festive diurne",String(fest))}${kv("Ore di attività aggiuntiva",hm(aggA))}
    ${kv("Tariffa guardia (ultimo cedolino)",P.tG!=null?fmt(P.tG)+"/h":"—")}${kv("Tariffa aggiuntiva (ultimo cedolino)",P.tA!=null?fmt(P.tA)+"/h":"—")}</dl>
    <p class="note">Guardie e aggiuntiva di un mese si pagano di norma con il cedolino di due mesi dopo. Ore di guardia = ore gettone notturne + festive del cartellino. Le ore di aggiuntiva pagate sono quelle certificate nel report della U.O.C. Libera Professione, che può arrotondare rispetto alle timbrature.</p></div>
+ <div class="box"><h3>Pagamenti di guardie e aggiuntiva</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese lavorato</th><th>Voce</th><th>Ore</th><th>Atteso (lordo)</th><th>Pagato</th><th></th></tr></thead><tbody>${pRows||'<tr><td colspan="6" class="muted">Nessuna guardia o attività aggiuntiva nei cartellini letti.</td></tr>'}</tbody></table></div>
+  <p class="note">Atteso = ore × tariffa dell'ultimo cedolino. «In arrivo» finché non c'è il cedolino di due mesi dopo; poi il confronto è con le ore pagate (scarto fino a 15 minuti considerato arrotondamento).</p></div>
+</section>`:`<section class="sheet">${head}${errs}
+ <div class="hero">
+  <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}</span></div>
+  <div class="tile"><span class="l">Recupero ore residuo</span><span class="v">${hm(x.recupero)}</span><span class="s">${(()=>{const i=L.indexOf(x),pr=i>0&&L[i-1].periodo===ymAdd(x.periodo,-1)?L[i-1]:null,u=cartUsate(L,x);return pr&&u!=null?`${hm(pr.recupero)} di ${MESE_L(pr.periodo).toLowerCase().split(" ")[0]} ${hmS(saldo)} saldo${u?" − "+hm(u)+" recuperate":""}`:"a fine "+MESE_L(x.periodo).toLowerCase();})()}</span></div>
+  <div class="tile t-liq"><span class="l">Ferie residue</span><span class="v">${nGg(ferRes)}</span><span class="s">congedo ${fN.format(fer.co.residuo)} · festività soppresse ${fN.format(fer.fs.residuo)}${fer.ap.residuo?" · anni prec. "+fN.format(fer.ap.residuo):""} (a ${MESE_L(last.periodo).toLowerCase()})</span></div>
+ </div>
   <div class="box"><h3>Ferie ${anno}</h3><dl class="kv">
    ${kv("Congedo ordinario spettante",nGg(fer.co.spettanti))}${kv("Goduti",nGg(fer.co.fruiti))}${kv("Festività soppresse residue",nGg(fer.fs.residuo))}${fer.ap.residuo?kv("Residuo anni precedenti",nGg(fer.ap.residuo)):""}${kv("Residue totali",nGg(ferRes))}</dl>
    <p class="note">${Lanno.filter(y=>y.ferieGiorni.length).map(y=>MESE_L(y.periodo)+": "+y.ferieGiorni.join(", ")).join(" · ")||"Nessun giorno di ferie nei cartellini letti."}</p></div>
- </div>
- <div class="box"><h3>Pagamenti di guardie e aggiuntiva</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese lavorato</th><th>Voce</th><th>Ore</th><th>Atteso (lordo)</th><th>Pagato</th><th></th></tr></thead><tbody>${pRows||'<tr><td colspan="6" class="muted">Nessuna guardia o attività aggiuntiva nei cartellini letti.</td></tr>'}</tbody></table></div>
-  <p class="note">Atteso = ore × tariffa dell'ultimo cedolino. «In arrivo» finché non c'è il cedolino di due mesi dopo; poi il confronto è con le ore pagate (scarto fino a 15 minuti considerato arrotondamento).</p></div>
  <div class="box"><h3>Mesi</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Fatte</th><th>Dovute</th><th>Saldo mese</th><th>Recuperate</th><th>Residuo</th><th>Notti</th><th>Festive</th><th>Aggiuntiva</th><th>Ferie</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   <p class="note">Il residuo di recupero ore si muove così: residuo del mese prima + saldo del mese − ore recuperate con riposo (causale 9018, «recupero ore dirigenza»). Il saldo del mese, quindi, non coincide col residuo nei mesi in cui hai preso giorni di recupero. I giorni di riposo compensativo dopo una guardia festiva (9013) sono già nel saldo, come le ore mancanti il giorno prima di una notte. Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
  <div class="box" id="lv-giorni"><h3>Giorni di ${MESE_L(x.periodo).toLowerCase()}${x.calcolo?` <small class="muted">· calcolo del ${dIt(x.calcolo.slice(0,10))}</small>`:""}</h3><div class="tbl-wrap flat"><table class="lv-days"><thead><tr><th>Giorno</th><th>Timbrature</th><th>Causali</th><th>Ore</th><th>Ecc./car.</th></tr></thead><tbody>${days}</tbody></table></div>
   <p class="note"><span class="lv-ta">In corsivo</span> le timbrature di attività aggiuntiva. Le notti iniziano alle 20 e finiscono il mattino dopo: le ore compaiono sul giorno di uscita.</p></div>
-</section>`;};
+</section>`;}
+V.presenze=()=>lavPage("presenze");
+V["lv-pag"]=()=>lavPage("pag");
 function cartInfo(){const cs=cartState(),c=S.cart,L=c?c.lista:[];
  return [["Cartellini letti",c?L.filter(x=>x.ok).length+" verificati"+(L.some(x=>!x.ok)?", "+L.filter(x=>!x.ok).length+" da controllare":"")+(c.errori.length?", "+c.errori.length+" illeggibili":""):"—"],
   ["Mesi",L.length?MESE_L(L[0].periodo)+" – "+MESE_L(L[L.length-1].periodo):"nessuno"],
@@ -1425,21 +1450,276 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act='cart-sel'
  CART_SEL=b.dataset.ym;render();const t=document.getElementById("lv-giorni");if(t)t.scrollIntoView({behavior:"smooth",block:"start"});});
 view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-act='cart-sel']");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();r.click();}});
 
+/* ================= sondaggi (ex app Guadagni sondaggi, ora dentro il Gestionale) ================= */
+/* Stessi dati e stesso formato dell'app Guadagni: localStorage «survey-earnings-tracker-v1»
+   {v,sites[{id,name,color}],months{"YYYY-MM":{site:{g,p}}},pending[{id,site,amount,note,date}],updatedAt}, importi in centesimi.
+   Backup sul PC con l'app Hub «guadagni» (stessa cartella di prima). Ogni modifica aggiorna anche Entrate › Sondaggi (prelievi). */
+const SOND_DEF_SITES=[{id:"sermo",name:"Sermo",color:"#3E6FD8"},{id:"m3",name:"M3 Global Research",color:"#2BA39A"},{id:"agc",name:"AllGlobalCircle",color:"#9A5BD6"},{id:"hab",name:"HabCentral",color:"#D88A2E"},{id:"zoomrx",name:"ZoomRx",color:"#D4547A"}];
+const SOND_PAL=["#3E6FD8","#2BA39A","#9A5BD6","#D88A2E","#D4547A","#4E9A3A","#C0453A","#2E8DB8","#8A6D3B","#6B5BD6","#B8478F","#5A7A8C"];
+const SOND_HUB_STATE_KEY="gestionale-sond-hub";
+const isoToday=()=>new Date().toLocaleDateString("sv-SE");
+function sondSites(arr){if(!Array.isArray(arr)||!arr.length)return SOND_DEF_SITES.map(s=>({...s}));const out=[],seen=new Set();
+ arr.forEach((s,i)=>{if(!s||typeof s.id!=="string"||!/^[a-z0-9_-]{1,48}$/.test(s.id)||seen.has(s.id))return;seen.add(s.id);
+  out.push({id:s.id,name:String(s.name||"").trim().slice(0,40)||s.id,color:/^#[0-9a-fA-F]{6}$/.test(s.color||"")?s.color:SOND_PAL[i%SOND_PAL.length]});});
+ return out.length?out:SOND_DEF_SITES.map(s=>({...s}));}
+function sondClean(d){d=d&&typeof d==="object"?d:{};const sites=sondSites(d.sites),ids=new Set(sites.map(s=>s.id)),months={};
+ Object.entries(d.months&&typeof d.months==="object"?d.months:{}).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,row])=>{if(!ymOk(k)||!row||typeof row!=="object")return;const r={};
+  sites.forEach(s=>{const c=row[s.id];if(c&&(c.g||c.p))r[s.id]={g:Math.max(0,Math.round(+c.g||0)),p:Math.max(0,Math.round(+c.p||0))};});if(Object.keys(r).length)months[k]=r;});
+ const seen=new Set(),pending=(Array.isArray(d.pending)?d.pending:[]).filter(x=>x&&typeof x.id==="string"&&!seen.has(x.id)&&ids.has(x.site)&&+x.amount>0)
+  .map(x=>{seen.add(x.id);return{id:x.id.slice(0,40),site:x.site,amount:Math.round(+x.amount),note:String(x.note||"").slice(0,80),date:dOk(x.date)?x.date:isoToday()};});
+ return{v:1,sites,months,pending};}
+let SV=null;
+function svLoad(){try{const raw=lsGet(SOND_LS_KEY);const d=raw?JSON.parse(raw):null;SV=sondClean(d);SV.updatedAt=d&&d.updatedAt||"";}catch(e){SV=sondClean(null);SV.updatedAt="";}return SV;}
+function svData(){return{v:1,sites:SV.sites,months:SV.months,pending:SV.pending}}
+const svSig=d=>JSON.stringify([d.sites,d.months,d.pending]);
+/* modifica locale: salva, aggiorna Entrate, programma il backup sul PC */
+function svSave(){SV=Object.assign(sondClean(SV),{updatedAt:new Date().toISOString()});
+ lsSet(SOND_LS_KEY,JSON.stringify(Object.assign(svData(),{updatedAt:SV.updatedAt})));
+ if(hasRealData(S)&&applySond({months:SV.months,t:Date.now(),fonte:"locale"}))scheduleSave();
+ clearTimeout(svHubTimer);svHubTimer=setTimeout(()=>svHubSync(false),8000);}
+const svGet=(k,id,f)=>(SV.months[k]&&SV.months[k][id]&&SV.months[k][id][f])||0;
+function svCell(k,id){SV.months[k]=SV.months[k]||{};SV.months[k][id]=SV.months[k][id]||{g:0,p:0};return SV.months[k][id];}
+const svTot=k=>{let g=0,p=0;SV.sites.forEach(s=>{g+=svGet(k,s.id,"g");p+=svGet(k,s.id,"p");});return{g,p}};
+const svUsed=()=>Object.keys(SV.months).filter(k=>{const t=svTot(k);return t.g||t.p}).sort();
+const svPend=id=>SV.pending.filter(x=>!id||x.site===id).reduce((a,x)=>a+x.amount,0);
+const cE=c=>fmt((c||0)/100);
+function svCents(str){let t=String(str==null?"":str).trim().replace(/[€\s]/g,"");if(!t)return NaN;if(t.includes(","))t=t.replace(/\./g,"").replace(",",".");const n=Number(t);return isFinite(n)?Math.round(n*100):NaN;}
+const c2f=c=>c?(c/100).toFixed(2).replace(".",","):"";
+/* backup dei sondaggi sul PC (Hub, app «guadagni») */
+let svHubTimer=null,svHubBusy=false;
+function svHubState(){return lsJSON(SOND_HUB_STATE_KEY)}
+async function svHubSync(force){if(svHubBusy||!hubUrl()||!SV||!svUsed().length&&!SV.pending.length)return;
+ const body=JSON.stringify(svData()),h=await sha(body);if(!force&&svHubState().lastHash===h)return;
+ svHubBusy=true;
+ try{const r=await hubFetch("/api/guadagni/backup",{method:"POST",headers:{"Content-Type":"application/json"},body});
+  lsSet(SOND_HUB_STATE_KEY,JSON.stringify({lastHash:h,lastSig:svSig(sondClean(svData())),lastOk:Date.now(),lastErr:"",file:r&&r.file||""}));if(force)linkMsg("sond","Backup dei sondaggi salvato sul PC.");}
+ catch(e){lsSet(SOND_HUB_STATE_KEY,JSON.stringify(Object.assign(svHubState(),{lastErr:e.message,lastErrAt:Date.now()})));if(force)linkMsg("sond","Backup dei sondaggi non riuscito: "+e.message+".");}
+ finally{svHubBusy=false;refreshLinks();}}
+
+/* ---- viste ---- */
+let SV_CUR=new Date().toLocaleDateString("sv-SE").slice(0,7),SV_YEAR=String(new Date().getFullYear()),SV_OPEN=new Set(),SV_CONF=null,SV_FIX=null,SV_BULK=null;
+const MESI_B=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+const svDot=c=>`<i class="sv-dot" style="background:${c}"></i>`;
+function svYears(){const ys=[...new Set(svUsed().map(k=>k.slice(0,4)))];const cy=String(new Date().getFullYear());if(!ys.includes(cy))ys.push(cy);return ys.sort();}
+function svBars(months){if(!months.length)return `<p class="muted">Il grafico comparirà dopo il primo importo registrato.</p>`;
+ const W=640,H=230,m={t:10,r:6,b:28,l:56},iw=W-m.l-m.r,ih=H-m.t-m.b,data=months.map(k=>({k,...svTot(k)}));
+ let max=Math.max(1,...data.map(d=>Math.max(d.g,d.p)));const raw=max/4,pw=Math.pow(10,Math.floor(Math.log10(raw||1))),n=raw/pw,step=(n<=1?1:n<=2?2:n<=5?5:10)*pw;max=Math.ceil(max/step)*step;
+ let g="";for(let v=0;v<=max+0.5;v+=step){const y=m.t+ih-(v/max)*ih;g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${m.l-6}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--muted)">${fN.format(Math.round(v/100))} €</text>`;}
+ const band=iw/data.length,bw=Math.min(24,band*0.32),gap=Math.min(4,band*0.05),every=Math.ceil(data.length/Math.max(1,Math.floor(iw/46)));
+ data.forEach((d,i)=>{const cx=m.l+band*i+band/2;
+  [["g","var(--c-ent)",-1],["p","var(--c-liq)",1]].forEach(([f,c,sd])=>{const h=d[f]/max*ih;g+=`<rect x="${sd<0?cx-gap/2-bw:cx+gap/2}" y="${m.t+ih-h}" width="${bw}" height="${Math.max(0,h)}" rx="3" fill="${c}"/>`;});
+  if(i%every===0){const mm=+d.k.slice(5)-1;g+=`<text x="${cx}" y="${H-m.b+17}" text-anchor="middle" font-size="11" fill="var(--muted)">${MESI_B[mm]}${data.length>1&&(mm===0||i===0)?" "+d.k.slice(2,4):""}</text>`;}
+  g+=`<rect x="${m.l+band*i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent" data-act="sv-goto" data-ym="${d.k}" style="cursor:pointer"><title>${MESE_L(d.k)}: guadagni ${cE(d.g)}, prelievi ${cE(d.p)}</title></rect>`;});
+ return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Guadagni e prelievi per mese">${g}</svg>`;}
+
+V.sondaggi=()=>{svLoad();const Y=String(new Date().getFullYear()),ym=new Date().toLocaleDateString("sv-SE").slice(0,7),mn=MESI[+ym.slice(5)-1].toLowerCase();
+ const ms=svUsed().filter(k=>k.startsWith(Y));let gY=0,pY=0;ms.forEach(k=>{const t=svTot(k);gY+=t.g;pY+=t.p;});
+ const bySite=f=>SV.sites.map(s=>{let v=0;ms.forEach(k=>v+=svGet(k,s.id,f));return[s.name,v/100,s.color];}).filter(x=>x[1]>0);
+ const gS=bySite("g"),tm=svTot(ym),mS=SV.sites.map(s=>[s.name,svGet(ym,s.id,"g")/100,s.color]).filter(x=>x[1]>0);
+ const pend=SV.sites.map(s=>[s.name,svPend(s.id)/100,s.color]).filter(x=>x[1]>0),pT=svPend()/100;
+ const bal=SV.sites.map(s=>{let g=0,p=0;Object.keys(SV.months).forEach(k=>{g+=svGet(k,s.id,"g");p+=svGet(k,s.id,"p");});return[s.name,Math.max(0,(g-p)/100),s.color];}),balT=sum(bal.map(x=>x[1]));
+ const empty=!svUsed().length&&!SV.pending.length;
+ return `<section class="sheet">
+ <div class="sheet-h"><h2>Dashboard sondaggi ${Y}</h2><p>Guadagni, prelievi e importi in attesa sui portali di sondaggi retribuiti. I prelievi di ogni mese entrano da soli in Finanze › Entrate.</p></div>
+ ${empty?`<div class="banner">Nessun dato dei sondaggi su questo dispositivo. ${hubUrl()?`Se li hai nell'app Guadagni, recuperali dal PC: <a href="#collegamenti">Collegamenti e backup</a> › Sondaggi › «Ripristina dal PC».`:`Imposta l'indirizzo dell'Hub in <a href="#collegamenti">Collegamenti e backup</a> per recuperarli dal PC.`} Oppure inizia da <a href="#sond-mese">Inserimento</a>.</div>`:""}
+ <div class="box pcard"><h3>Guadagni ${Y} <small>per piattaforma</small></h3>
+ <div class="pcard-in">
+  <a class="pcard-main pmain" href="#sond-storico" data-act="go" data-tab="sond-storico" title="Apri lo storico">${donut(gS,170,26,"Guadagni "+Y+" per piattaforma",true,gY/100,"guadagnato")}
+   <div class="pside"><ul class="pleg">${gS.map(([l,v,c])=>li(c,l,v,gY/100)).join("")||`<li><span class="muted">Ancora nessun guadagno nel ${Y}</span></li>`}</ul>
+   <dl class="kv">${kv("Prelevato nel "+Y,`<span class="nt-liq">${cE(pY)}</span>`)}${kv("Guadagnato − prelevato",cE(gY-pY))}</dl></div></a>
+  <div class="pcard-sub">
+   <a class="psub" href="#sond-mese" data-act="go" data-tab="sond-mese" data-svm="${ym}" title="Apri l'inserimento di ${mn}"><h4>Mese di ${mn} <small>${cE(tm.g)}</small></h4>
+    <div class="psub-in">${donut(mS,112,15,"Guadagni di "+mn,1,tm.g/100,"guadagnato")}<div><ul class="pleg">${mS.map(([l,v,c])=>li(c,l,v,tm.g/100)).join("")||`<li><span class="muted">Niente ancora questo mese</span></li>`}</ul>
+    <dl class="kv">${kv("Prelevato nel mese",`<span class="nt-liq">${cE(tm.p)}</span>`)}</dl></div></div></a>
+   <a class="psub" href="#sond-mese" data-act="go" data-tab="sond-mese" title="Apri gli importi in attesa"><h4>In attesa di approvazione <small>${SV.pending.length?SV.pending.length+(SV.pending.length===1?" importo":" importi"):"nessuno"}</small></h4>
+    <div class="psub-in">${donut(pend,112,15,"In attesa",1,pT,"in attesa")}<div><ul class="pleg">${pend.map(([l,v,c])=>li(c,l,v,pT)).join("")||`<li><span class="muted">Nessun importo in attesa</span></li>`}</ul>
+    <dl class="kv">${kv("Non inclusi nei guadagni","finché non accreditati")}</dl></div></div></a>
+   <a class="psub" href="#sond-mese" data-act="go" data-tab="sond-mese" title="Apri l'inserimento"><h4>Saldo sui portali <small>non prelevato</small></h4>
+    <div class="psub-in">${donut(bal.filter(x=>x[1]>0),112,15,"Saldo sui portali",1,balT,"da prelevare")}<div><ul class="pleg">${bal.filter(x=>x[1]>0).map(([l,v,c])=>li(c,l,v,balT)).join("")||`<li><span class="muted">Tutto prelevato</span></li>`}</ul>
+    <dl class="kv">${kv("Totale da prelevare",cE(balT*100))}</dl></div></div></a>
+   <a class="psub" href="#sond-storico" data-act="go" data-tab="sond-storico" title="Apri lo storico"><h4>Guadagni e prelievi · storico <small>${svUsed().length} mesi</small></h4>
+    <div class="psub-in">${donut([["Prelevato",pY/100,"c-liq"],["Guadagnato non prelevato",Math.max(0,(gY-pY)/100),"c-ent"]],112,15,"Prelevato "+Y,1,gY/100,"nel "+Y)}<div><ul class="pleg">${li("c-liq","Prelevato",pY/100,gY/100)}${li("c-ent","Non ancora prelevato",Math.max(0,(gY-pY)/100),gY/100)}</ul>
+    <dl class="kv">${kv("Entrate in Finanze "+Y,`<span class="nt-ent">${cE(pY)}</span>`)}</dl></div></div></a>
+  </div></div></div>
+</section>`;};
+
+V["sond-mese"]=()=>{svLoad();const k=SV_CUR,t=svTot(k);
+ const site=s=>{let tg=0,tp=0;Object.keys(SV.months).forEach(m=>{tg+=svGet(m,s.id,"g");tp+=svGet(m,s.id,"p");});
+  const items=SV.pending.filter(x=>x.site===s.id).sort((a,b)=>a.date.localeCompare(b.date)),op=SV_OPEN.has(s.id);
+  const ctr=(f,lab)=>`<div class="sv-ctr ${f}"><div class="sv-ctr-h"><span>${lab}</span>${SV_FIX===s.id+":"+f?`<input class="in sv-fix" data-site="${s.id}" data-f="${f}" inputmode="decimal" value="${c2f(svGet(k,s.id,f))}" aria-label="Totale ${lab.toLowerCase()} ${esc(s.name)}">`:`<button class="sv-val" data-act="sv-fix" data-site="${s.id}" data-f="${f}" title="Tocca per correggere il totale">${cE(svGet(k,s.id,f))}</button>`}</div>
+   <div class="sv-ctr-e"><input class="in sv-amt" data-site="${s.id}" data-f="${f}" inputmode="decimal" placeholder="Importo €" aria-label="Importo da aggiungere a ${lab.toLowerCase()} ${esc(s.name)}"><button class="btn" data-act="sv-add" data-site="${s.id}" data-f="${f}" data-sg="1" aria-label="Aggiungi">+</button><button class="btn ghost" data-act="sv-add" data-site="${s.id}" data-f="${f}" data-sg="-1" aria-label="Sottrai">−</button></div></div>`;
+  return `<div class="sv-site"><div class="sv-site-h"><b>${svDot(s.color)}${esc(s.name)}</b><span class="muted">non prelevato ${cE(tg-tp)}</span></div>
+   <div class="sv-ctrs">${ctr("g","Guadagni")}${ctr("p","Prelievi")}</div>
+   <div class="sv-pend"><div class="sv-pend-h"><span>In attesa di approvazione</span><b>${items.length?cE(svPend(s.id))+" ("+items.length+")":"nessuno"}</b><button class="btn ghost sm" data-act="sv-pt" data-site="${s.id}">${op?"Chiudi":items.length?"Gestisci":"+ Aggiungi"}</button></div>
+   ${op?`<div class="sv-pend-b">${items.map(it=>`<div class="sv-pi"><b>${cE(it.amount)}</b><span class="muted">${it.note?esc(it.note)+" · ":""}dal ${dIt(it.date)}</span><button class="btn sm" data-act="sv-pok" data-id="${it.id}">✓ Accreditato</button><button class="btn ghost sm" data-act="sv-pdel" data-id="${it.id}" aria-label="Elimina">×</button>
+     ${SV_CONF===it.id?`<div class="sv-pc">Sposta nei guadagni di <input type="month" class="in" id="sv-pc-m" value="${new Date().toLocaleDateString("sv-SE").slice(0,7)}"><button class="btn sm" data-act="sv-pgo" data-id="${it.id}">Conferma</button><button class="btn ghost sm" data-act="sv-pno">Annulla</button></div>`:""}</div>`).join("")}
+    <div class="sv-padd"><input class="in sv-pa" data-site="${s.id}" inputmode="decimal" placeholder="Importo €" aria-label="Nuovo importo in attesa"><input class="in txt sv-pn" data-site="${s.id}" maxlength="80" placeholder="Nota (facoltativa)" aria-label="Nota"><button class="btn sm" data-act="sv-padd" data-site="${s.id}">Aggiungi in attesa</button></div></div>`:""}</div>
+   <button class="icon-btn sv-rm" data-act="sv-rm" data-site="${s.id}" aria-label="Rimuovi ${esc(s.name)}" title="Rimuovi piattaforma">×</button></div>`;};
+ return `<section class="sheet">
+ <div class="sheet-h"><h2>Inserimento</h2><p>Aggiungi guadagni e prelievi del mese per ogni piattaforma; tocca un totale per correggerlo. Gli importi «in attesa» non contano finché non li segni come accreditati.</p></div>
+ <div class="box sv-month"><div class="sv-nav"><button class="btn ghost" data-act="sv-m" data-d="-1" aria-label="Mese precedente">‹</button><h3>${MESE_L(k)}</h3><button class="btn ghost" data-act="sv-m" data-d="1" aria-label="Mese successivo">›</button></div>
+  <div class="sv-mt"><span>Guadagnato <b class="nt-ent">${cE(t.g)}</b></span><span>Prelevato <b class="nt-liq">${cE(t.p)}</b></span></div></div>
+ <div class="sv-sites">${SV.sites.map(site).join("")}</div>
+ <div class="box"><h3>Nuova piattaforma</h3><div class="addrow"><label class="grow">Nome<input class="in txt" id="sv-new" maxlength="40" placeholder="es. Medscape"></label><button class="btn" data-act="sv-newsite">Aggiungi piattaforma</button></div><p class="note" id="sv-new-msg" hidden></p></div>
+</section>`;};
+
+V["sond-storico"]=()=>{svLoad();const ys=svYears();if(SV_YEAR!=="all"&&!ys.includes(SV_YEAR))SV_YEAR="all";
+ const ms=svUsed().filter(k=>SV_YEAR==="all"||k.startsWith(SV_YEAR));let G=0,P=0;ms.forEach(k=>{const t=svTot(k);G+=t.g;P+=t.p;});
+ if(!SV_BULK){const cur=new Date().toLocaleDateString("sv-SE").slice(0,7);SV_BULK={da:ymAdd(cur,-11),a:cur};}
+ const bm=[];{let a=SV_BULK.da,b=SV_BULK.a;if(a>b)[a,b]=[b,a];let x=a,n=0;while(x<=b&&n<240){bm.push(x);x=ymAdd(x,1);n++;}}
+ const siteRows=SV.sites.map(s=>{let g=0,p=0;ms.forEach(k=>{g+=svGet(k,s.id,"g");p+=svGet(k,s.id,"p");});const w=svPend(s.id);
+  return `<tr><td>${svDot(s.color)}${esc(s.name)}</td><td class="nt-ent">${cE(g)}</td><td class="nt-liq">${cE(p)}</td><td class="${g-p<0?"neg":""}">${cE(g-p)}</td><td>${w?cE(w):"—"}</td></tr>`;}).join("");
+ return `<section class="sheet">
+ <div class="sheet-h"><h2>Storico</h2><p>Guadagni e prelievi mese per mese e per piattaforma. Tocca un mese per aprirlo in Inserimento.</p></div>
+ <div class="years" role="group" aria-label="Periodo">${["all",...ys].map(y=>`<button class="ybtn" data-act="sv-y" data-y="${y}" ${y===SV_YEAR?'aria-pressed="true"':""}>${y==="all"?"Tutti":y}</button>`).join("")}</div>
+ <div class="hero">
+  <div class="tile t-ent"><span class="l">Guadagnato</span><span class="v">${cE(G)}</span><span class="s">${SV_YEAR==="all"?"da sempre":"nel "+SV_YEAR}</span></div>
+  <div class="tile t-liq"><span class="l">Prelevato</span><span class="v">${cE(P)}</span><span class="s">entra in Finanze › Entrate</span></div>
+  <div class="tile"><span class="l">Differenza</span><span class="v">${cE(G-P)}</span><span class="s">guadagnato − prelevato</span></div>
+  <div class="tile t-tax"><span class="l">In attesa</span><span class="v">${cE(svPend())}</span><span class="s">${SV.pending.length} ${SV.pending.length===1?"importo":"importi"}, non inclusi</span></div>
+ </div>
+ <div class="box"><h3>Guadagni e prelievi per mese</h3><div class="legend"><span><i style="background:var(--c-ent)"></i>Guadagni</span><span><i style="background:var(--c-liq)"></i>Prelievi</span></div><div class="sv-chart">${svBars(ms)}</div></div>
+ <div class="grid">
+  <div class="box"><h3>Dettaglio mensile</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Guadagni</th><th>Prelievi</th><th>Differenza</th></tr></thead><tbody>
+   ${ms.slice().reverse().map(k=>{const t=svTot(k);return `<tr class="ced-row" data-act="sv-goto" data-ym="${k}" tabindex="0"><td>${MESE_L(k)}</td><td class="nt-ent">${cE(t.g)}</td><td class="nt-liq">${cE(t.p)}</td><td class="${t.g-t.p<0?"neg":""}">${cE(t.g-t.p)}</td></tr>`;}).join("")||`<tr><td colspan="4" class="muted">Nessun importo registrato.</td></tr>`}
+   </tbody>${ms.length?`<tfoot><tr><td>Totale</td><td>${cE(G)}</td><td>${cE(P)}</td><td>${cE(G-P)}</td></tr></tfoot>`:""}</table></div></div>
+  <div class="box"><h3>Per piattaforma</h3><div class="tbl-wrap flat"><table><thead><tr><th>Piattaforma</th><th>Guadagni</th><th>Prelievi</th><th>Differenza</th><th>In attesa</th></tr></thead><tbody>${siteRows}</tbody>
+   <tfoot><tr><td>Totale</td><td>${cE(G)}</td><td>${cE(P)}</td><td>${cE(G-P)}</td><td>${cE(svPend())}</td></tr></tfoot></table></div></div>
+ </div>
+ <details class="more" id="sv-bulk" ${SV_BULK.open?"open":""}><summary>Inserisci i mesi passati</summary>
+  <p class="note">Scrivi i totali di ogni mese. Ogni valore si salva appena lasci la casella e sostituisce quello presente; una casella vuota vale zero.</p>
+  <div class="addrow"><label>Dal mese<input type="month" class="in" id="sv-bda" value="${SV_BULK.da}"></label><label>al mese<input type="month" class="in" id="sv-ba" value="${SV_BULK.a}"></label></div>
+  <div class="sv-bulk">${bm.slice().reverse().map(k=>`<div class="sv-bc"><div class="sv-bc-h"><b>${MESE_L(k)}</b><span class="muted" data-bt="${k}">${cE(svTot(k).g)} / ${cE(svTot(k).p)}</span></div>
+   ${SV.sites.map(s=>`<div class="sv-br"><span>${svDot(s.color)}${esc(s.name)}</span><label>Guadagni<input class="in sv-b" data-ym="${k}" data-site="${s.id}" data-f="g" inputmode="decimal" placeholder="0" value="${c2f(svGet(k,s.id,"g"))}"></label><label>Prelievi<input class="in sv-b" data-ym="${k}" data-site="${s.id}" data-f="p" inputmode="decimal" placeholder="0" value="${c2f(svGet(k,s.id,"p"))}"></label></div>`).join("")}</div>`).join("")}</div>
+ </details>
+</section>`;};
+
+/* ---- azioni ---- */
+function svAddPending(id){const a=document.querySelector(`.sv-pa[data-site="${id}"]`),n=document.querySelector(`.sv-pn[data-site="${id}"]`),v=svCents(a&&a.value);
+ if(isNaN(v)||v<=0){if(a)a.focus();return;}SV.pending.push({id:"w"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),site:id,amount:v,note:(n&&n.value||"").trim().slice(0,80),date:isoToday()});svSave();render();}
+function svApply(id,f,sg){const i=document.querySelector(`.sv-amt[data-site="${id}"][data-f="${f}"]`),v=svCents(i&&i.value);if(isNaN(v)||v<=0){if(i)i.focus();return;}
+ const c=svCell(SV_CUR,id);c[f]=Math.max(0,c[f]+sg*v);svSave();render();}
+function svFixCommit(inp,ok){if(!inp||inp.dataset.done)return;inp.dataset.done="1";
+ if(ok){const v=svCents(inp.value);if(!isNaN(v)&&v>=0){svCell(SV_CUR,inp.dataset.site)[inp.dataset.f]=v;svSave();}}SV_FIX=null;render();}
+view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='sv-']");if(!b)return;const a=b.dataset.act,id=b.dataset.site;
+ if(a!=="sv-goto")e.preventDefault();
+ if(a==="sv-goto"){SV_CUR=b.dataset.ym;location.hash="sond-mese";return;}
+ if(a==="sv-y"){SV_YEAR=b.dataset.y;render();return;}
+ if(READONLY)return;
+ if(a==="sv-m"){SV_CUR=ymAdd(SV_CUR,+b.dataset.d);SV_CONF=null;render();return;}
+ if(a==="sv-fix"){SV_FIX=id+":"+b.dataset.f;render();const i=document.querySelector(".sv-fix");if(i){i.focus();i.select();}return;}
+ if(a==="sv-add"){svApply(id,b.dataset.f,+b.dataset.sg);return;}
+ if(a==="sv-pt"){SV_OPEN.has(id)?SV_OPEN.delete(id):SV_OPEN.add(id);SV_CONF=null;render();return;}
+ if(a==="sv-padd"){svAddPending(id);return;}
+ if(a==="sv-pok"){SV_CONF=SV_CONF===b.dataset.id?null:b.dataset.id;render();return;}
+ if(a==="sv-pno"){SV_CONF=null;render();return;}
+ if(a==="sv-pgo"){const it=SV.pending.find(x=>x.id===b.dataset.id),m=document.getElementById("sv-pc-m");if(!it||!m||!ymOk(m.value))return;
+  svCell(m.value,it.site).g+=it.amount;SV.pending=SV.pending.filter(x=>x.id!==it.id);SV_CONF=null;svSave();render();return;}
+ if(a==="sv-pdel"){const it=SV.pending.find(x=>x.id===b.dataset.id);if(!it)return;const s=SV.sites.find(x=>x.id===it.site);
+  if(!confirm("Eliminare "+cE(it.amount)+" in attesa su "+(s?s.name:"")+"? Usalo se il sondaggio non è stato approvato."))return;SV.pending=SV.pending.filter(x=>x.id!==it.id);svSave();render();return;}
+ if(a==="sv-rm"){const s=SV.sites.find(x=>x.id===id);if(!s)return;if(SV.sites.length<=1){alert("Serve almeno una piattaforma");return;}
+  let g=0,p=0;Object.keys(SV.months).forEach(k=>{g+=svGet(k,id,"g");p+=svGet(k,id,"p");});
+  if(!confirm((g||p)?`Rimuovere ${s.name}? Verranno eliminati anche i suoi importi (guadagni ${cE(g)}, prelievi ${cE(p)}).`:`Rimuovere ${s.name}?`))return;
+  SV.sites=SV.sites.filter(x=>x.id!==id);SV.pending=SV.pending.filter(x=>x.site!==id);Object.values(SV.months).forEach(r=>{delete r[id];});svSave();render();return;}
+ if(a==="sv-newsite"){const inp=document.getElementById("sv-new"),msg=document.getElementById("sv-new-msg"),name=(inp.value||"").trim().slice(0,40);
+  const err=!name?"Scrivi il nome della piattaforma":SV.sites.some(s=>s.name.toLowerCase()===name.toLowerCase())?"Esiste già una piattaforma con questo nome":"";
+  if(err){msg.textContent=err;msg.hidden=false;inp.focus();return;}
+  const used=new Set(SV.sites.map(s=>s.color)),slug=(name.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24))||"p";
+  SV.sites.push({id:slug+"-"+Date.now().toString(36),name,color:SOND_PAL.find(c=>!used.has(c))||SOND_PAL[SV.sites.length%SOND_PAL.length]});svSave();render();return;}});
+view.addEventListener("keydown",e=>{const t=e.target;if(!t.classList)return;
+ if(t.classList.contains("sv-fix")){if(e.key==="Enter"){e.preventDefault();svFixCommit(t,true);}if(e.key==="Escape")svFixCommit(t,false);return;}
+ if(e.key!=="Enter")return;
+ if(t.classList.contains("sv-amt")){e.preventDefault();svApply(t.dataset.site,t.dataset.f,1);}
+ else if(t.classList.contains("sv-pa")||t.classList.contains("sv-pn")){e.preventDefault();svAddPending(t.dataset.site);}
+ else if(t.id==="sv-new"){e.preventDefault();document.querySelector("[data-act='sv-newsite']").click();}
+ else if(t.classList.contains("sv-b")){e.preventDefault();const all=[...document.querySelectorAll(".sv-b")],nx=all[all.indexOf(t)+1];if(nx)nx.focus();else t.blur();}
+ else if(t.closest&&t.closest("tr[data-act='sv-goto']")){t.closest("tr").click();}});
+view.addEventListener("focusout",e=>{if(e.target.classList&&e.target.classList.contains("sv-fix"))svFixCommit(e.target,true);});
+view.addEventListener("change",e=>{const t=e.target;
+ if(t.classList&&t.classList.contains("sv-b")){if(READONLY)return;const raw=t.value.trim(),v=raw===""?0:svCents(raw);if(isNaN(v)||v<0){t.classList.add("bad");return;}
+  t.classList.remove("bad");svCell(t.dataset.ym,t.dataset.site)[t.dataset.f]=v;t.value=c2f(v);svSave();const k=t.dataset.ym,bt=document.querySelector(`[data-bt="${k}"]`);if(bt)bt.textContent=cE(svTot(k).g)+" / "+cE(svTot(k).p);return;}
+ if(t.id==="sv-bda"||t.id==="sv-ba"){if(!ymOk(t.value))return;SV_BULK[t.id==="sv-bda"?"da":"a"]=t.value;SV_BULK.open=true;render();}});
+view.addEventListener("toggle",e=>{if(e.target.id==="sv-bulk"&&SV_BULK)SV_BULK.open=e.target.open;},true);
+/* backup dei sondaggi su file e dal PC (riquadro in Collegamenti) */
+function svExport(){const blob=new Blob([JSON.stringify(Object.assign(svData(),{exportedAt:new Date().toISOString()}),null,2)],{type:"application/json"});
+ const u=URL.createObjectURL(blob),l=document.createElement("a");l.href=u;l.download="guadagni-sondaggi-"+isoToday()+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);linkMsg("sond","Backup dei sondaggi scaricato.");}
+function svReplace(d,origine){const n=sondClean(d);if(!confirm(`Sostituire i dati dei sondaggi di questo dispositivo con ${origine} (${Object.keys(n.months).length} mesi, ${n.sites.length} piattaforme)?`))return false;
+ SV=Object.assign(n,{updatedAt:""});svSave();return true;}
+/* ================= dashboard Lavoro ================= */
+const hmF=v=>hm(Math.round(v*60)); /* ore decimali -> h:mm (per le ciambelle) */
+V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
+ const head=`<div class="sheet-h"><h2>Dashboard lavoro${L.length?" "+L[L.length-1].periodo.slice(0,4):""}</h2><p>${L.length?`Ultimo cartellino: ${MESE_L(L[L.length-1].periodo).toLowerCase()}${L[L.length-1].provvisorio?" (provvisorio)":""}.`:"Cartellini presenze e cedolini letti sul PC di casa."}</p></div>`;
+ if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cartellino ancora. ${hubUrl()?"Salva i PDF nella cartella Cartellini e premi «Aggiorna ora».":"Imposta prima l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div>
+  <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Cedolini</a></div><p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p></section>`;
+ const x=L[L.length-1],anno=x.periodo.slice(0,4),Lanno=L.filter(y=>y.periodo.startsWith(anno)),mn=MESI[+x.periodo.slice(5)-1].toLowerCase();
+ const gN=x.tz.notte.mese/60,gF=x.tz.fest.mese/60,ag=x.agg/60,ord=Math.max(0,(x.fatto||0)/60-gN-gF);
+ const main=[["Orario ordinario",ord,"c-liq"],["Guardie notturne",gN,"c-inv"],["Guardie festive",gF,"c-tasse"],["Attività aggiuntiva",ag,"c-ent"]].filter(r=>r[1]>0),totM=sum(main.map(r=>r[1]));
+ const saldo=x.fatto!=null&&x.dovuto!=null?x.fatto-x.dovuto:null,u=cartUsate(L,x);
+ const fer=x.ferie,ferRes=fer.tot!=null?fer.tot:fer.co.residuo+fer.fs.residuo+fer.ap.residuo,ferGod=fer.co.fruiti+fer.fs.fruiti+fer.ap.fruiti;
+ const nA=Lanno.reduce((a,y)=>a+y.tz.notte.mese,0)/60,fA=Lanno.reduce((a,y)=>a+y.tz.fest.mese,0)/60,aA=Lanno.reduce((a,y)=>a+y.agg,0)/60;
+ const P=cartPagamenti(),arr=P.righe.filter(r=>r.stato==="attesa"),pag=P.righe.filter(r=>r.pag&&r.periodo.startsWith(anno)),vrf=P.righe.filter(r=>["meno","piu","manca"].includes(r.stato));
+ const totArr=sum(arr.map(r=>r.stima||0)),totPag=sum(pag.map(r=>r.pag.importo));
+ const ced=(S.ced?S.ced.lista:[]).filter(c=>c.controllo.ok),cl=ced[ced.length-1],cd=cl?cedDerive(cl):null;
+ const nf=v=>fN.format(v);
+ return `<section class="sheet">${head}
+ <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button></div><p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>
+ ${vrf.length?`<div class="banner">${vrf.length===1?"Un pagamento":vrf.length+" pagamenti"} di guardie o aggiuntiva da verificare: <a href="#lv-pag">Guardie e aggiuntiva</a>.</div>`:""}
+ <div class="box pcard"><h3>Ore di ${mn} <small>${x.provvisorio?"cartellino provvisorio":""}</small></h3>
+ <div class="pcard-in">
+  <a class="pcard-main pmain" href="#presenze" data-act="go" data-tab="presenze" title="Apri Presenze e ferie">${donut(main,170,26,"Ore di "+mn,true,totM,"ore",hmF)}
+   <div class="pside"><ul class="pleg">${main.map(([l,v,c])=>li(c,l,v,totM,hmF)).join("")}</ul>
+   <dl class="kv">${kv("Dovute",hm(x.dovuto))}${kv("Saldo del mese",`<span class="${saldo>0?"pos":saldo<0?"neg":""}">${hmS(saldo)}</span>`)}</dl></div></a>
+  <div class="pcard-sub">
+   <a class="psub" href="#presenze" data-act="go" data-tab="presenze" title="Apri Presenze e ferie"><h4>Recupero ore <small>a fine ${mn}</small></h4>
+    <div class="psub-in">${donut([["Residuo",Math.max(0,(x.recupero||0)/60),"c-risp"]],112,15,"Recupero ore",1,(x.recupero||0)/60,"residuo",hmF)}<div>
+    <dl class="kv">${(()=>{const i=L.indexOf(x),pr=i>0&&L[i-1].periodo===ymAdd(x.periodo,-1)?L[i-1]:null;return (pr?kv("Residuo a fine "+MESI[+pr.periodo.slice(5)-1].toLowerCase(),hm(pr.recupero)):"")+kv("Saldo del mese",hmS(saldo))+(u?kv("Ore recuperate",`−${hm(u)}`):"")+kv("Residuo",`<b>${hm(x.recupero)}</b>`);})()}</dl></div></div></a>
+   <a class="psub" href="#presenze" data-act="go" data-tab="presenze" title="Apri Presenze e ferie"><h4>Ferie ${anno} <small>${nGg(ferRes)} residue</small></h4>
+    <div class="psub-in">${donut([["Godute",ferGod,"c-spese"],["Residue",ferRes,"c-liq"]],112,15,"Ferie "+anno,1,ferRes,"residue",v=>nf(v)+" gg")}<div><ul class="pleg">${li("c-spese","Godute",ferGod,ferGod+ferRes,v=>nf(v)+" gg")}${li("c-liq","Residue",ferRes,ferGod+ferRes,v=>nf(v)+" gg")}</ul>
+    <dl class="kv">${kv("Congedo ordinario",nf(fer.co.residuo)+" su "+nf(fer.co.spettanti))}${kv("Festività soppresse",nf(fer.fs.residuo))}</dl></div></div></a>
+   <a class="psub" href="#lv-pag" data-act="go" data-tab="lv-pag" title="Apri Guardie e aggiuntiva"><h4>Guardie e aggiuntiva ${anno} <small>${hmF(nA+fA+aA)} ore</small></h4>
+    <div class="psub-in">${donut([["Guardie notturne",nA,"c-inv"],["Guardie festive",fA,"c-tasse"],["Attività aggiuntiva",aA,"c-ent"]],112,15,"Guardie e aggiuntiva "+anno,1,nA+fA+aA,"ore",hmF)}<div><ul class="pleg">${li("c-inv","Notti ("+Lanno.reduce((a,y)=>a+y.notti.length,0)+")",nA,nA+fA+aA,hmF)}${li("c-tasse","Festive ("+Lanno.reduce((a,y)=>a+y.festive.length,0)+")",fA,nA+fA+aA,hmF)}${li("c-ent","Aggiuntiva",aA,nA+fA+aA,hmF)}</ul></div></div></a>
+   <a class="psub" href="#lv-pag" data-act="go" data-tab="lv-pag" title="Apri Guardie e aggiuntiva"><h4>Pagamenti guardie e aggiuntiva <small>${arr.length?fmt(totArr)+" in arrivo":"nulla in sospeso"}</small></h4>
+    <div class="psub-in">${donut([["Pagati nel "+anno,totPag,"c-risp"],["In arrivo (stima)",totArr,"qa"]],112,15,"Pagamenti",1,totPag+totArr,"lordo")}<div><ul class="pleg">${li("c-risp","Già pagati",totPag,totPag+totArr)}${li("qa","In arrivo",totArr,totPag+totArr)}</ul>
+    <dl class="kv">${arr.map(r=>kv((r.tipo==="guardia"?"Guardia ":"Aggiuntiva ")+MESI[+r.periodo.slice(5)-1].toLowerCase(),`${fmt(r.stima)} <small class="muted">a ${MESI[+r.atteso.slice(5)-1].toLowerCase()}</small>`)).join("")||kv("In arrivo","—")}</dl></div></div></a>
+   ${cd?`<a class="psub" href="#cedolini" data-act="go" data-tab="cedolini" title="Apri i cedolini"><h4>Cedolino di ${MESE_L(cl.periodo).toLowerCase()} <small>netto ${fmt(cd.netto)}</small></h4>
+    <div class="psub-in">${donut([["Netto",cd.netto,"c-liq"],["Contributi",cd.contributi,"c-fisse"],["Imposte",cd.tasse,"c-tasse"]],112,15,"Cedolino",1,cd.lordo,"lordo")}<div><ul class="pleg">${li("c-liq","Netto",cd.netto,cd.lordo)}${li("c-fisse","Contributi",cd.contributi,cd.lordo)}${li("c-tasse","Imposte",cd.tasse,cd.lordo)}</ul>
+    <dl class="kv">${kv("Pagato il",dIt(cl.dataPagamento)||"—")}</dl></div></div></a>`:""}
+  </div></div></div>
+</section>`;};
+
+/* ================= home: tre sezioni collegate, come l'icona ================= */
+V.home=()=>{const L=S.cart?S.cart.lista:[],x=L[L.length-1];svLoad();
+ const Y=String(new Date().getFullYear());let pY=0;svUsed().filter(k=>k.startsWith(Y)).forEach(k=>pY+=svTot(k).p);
+ const lav=x?`saldo ${hmS(x.fatto!=null&&x.dovuto!=null?x.fatto-x.dovuto:null)} · ferie ${fN.format(x.ferie.tot!=null?x.ferie.tot:x.ferie.co.residuo+x.ferie.fs.residuo)} gg`:"nessun cartellino";
+ const fin=R.dash&&hasRealData(S)?`patrimonio ${fmt(Math.round(R.dash.patrL)).replace(/,\d\d(?=\s|$)/,"")}`:"nessun dato";
+ const son=svUsed().length?`prelevato ${Y} ${cE(pY).replace(/,\d\d(?=\s|$)/,"")}`:"nessun dato";
+ const node=(cls,href,title,sub,ico)=>`<a class="hn ${cls}" href="#${href}"><span class="hn-c">${ico}</span><span class="hn-t">${title}</span><span class="hn-s">${sub}</span></a>`;
+ return `<section class="sheet home">
+ ${!hasRealData(S)?`<div class="banner">Nessun dato su questo dispositivo (succede con un browser o un telefono nuovo). Vai in <a href="#collegamenti">Collegamenti e backup</a>: imposta l'indirizzo dell'Hub, poi «Ripristina dall'ultimo backup» per le finanze e «Ripristina dal PC» per i sondaggi. Cartellini e cedolini arrivano da soli.</div>`:""}
+ <div class="hgraph">
+  <svg class="hlines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M26 22 L74 22 M26 22 L50 64 M74 22 L50 64"/></svg>
+  ${node("hn-lav","lavoro","Lavoro",lav,`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>`)}
+  ${node("hn-fin","dashboard","Finanze",fin,`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19V13M10 19V9M15 19V11M20 19V5"/></svg>`)}
+  ${node("hn-son","sondaggi","Sondaggi",son,`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M8.5 10l1.5 1.5 3-3M8.5 16h7"/></svg>`)}
+ </div>
+ <p class="note home-n">Tocca una sezione. I dati sono collegati: le ore del cartellino diventano pagamenti nel cedolino, il netto e i prelievi dei sondaggi entrano nelle Entrate di Finanze.</p>
+</section>`;};
 /* ================= avvio ================= */
 (function init(){
  const raw=lsGet(LS_KEY);
  if(raw){try{S=load(JSON.parse(raw));status("ok","Dati salvati su questo dispositivo");}
   catch(e){S=load(null);status("err","Dati locali illeggibili: ripristina un backup");}}
  else{S=load(null);status("busy","Nessun dato: importa o ripristina un backup");}
- render();refreshLinks();
+ svLoad();render();refreshLinks();
  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
  setTimeout(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);},1200);
+ setTimeout(()=>svHubSync(false),4000);
  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);cartSync(false);hubSync(false);}
   else if(dirty)save();});
  window.addEventListener("pagehide",()=>{if(dirty)save();});
  window.addEventListener("online",()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);});
  window.addEventListener("storage",e=>{
-  if(e.key===SOND_LS_KEY)sondSync(false);
+  if(e.key===SOND_LS_KEY){svLoad();sondSync(false);if(["sondaggi","sond-mese","sond-storico","home"].includes(current))afterExternalChange();}
   else if(e.key===LS_KEY&&e.newValue&&!dirty){try{S=load(JSON.parse(e.newValue));afterExternalChange();}catch(_){}}});
 })();
 })();
