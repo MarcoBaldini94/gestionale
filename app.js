@@ -1309,7 +1309,7 @@ function cleanCart(c){if(!c||typeof c!=="object"||!ymOk(c.periodo))return null;
   fatto:minN(rp.fattoMin),dovuto:minN(rp.dovutoMin),recupero:minN(rp.recuperoResiduoMin),
   ferie:{fs:fr(fe.festivitaSoppresse),co:fr(fe.congedoOrdinario),ap:fr(fe.residuoAnniPrecedenti),tot:num(o(fe.residueTotali).residuo)},
   tz:{notte:mp(tz.gettoneNotturnaMin),fest:mp(tz.gettoneFestivaMin),indFest:mp(tz.indennitaFestiva)},
-  agg:minN(d.aggiuntivaMin)??0,aggGiorni:ints(d.aggiuntivaGiorni),notti:ints(d.notti),festive:ints(d.festive),ferieGiorni:ints(d.ferieGiorni),causali:caus,ok:k.ok===true};}
+  agg:minN(d.aggiuntivaMin)??0,aggGiorni:ints(d.aggiuntivaGiorni),recGiorni:gg.filter(g=>g.c.some(x=>x[0]==="9018")).map(g=>g.g),notti:ints(d.notti),festive:ints(d.festive),ferieGiorni:ints(d.ferieGiorni),causali:caus,ok:k.ok===true};}
 function sanitizeCart(x){if(!x||typeof x!=="object")return null;
  return{agg:str(x.agg),lista:(Array.isArray(x.lista)?x.lista:[]).map(cleanCart).filter(Boolean),
   errori:(Array.isArray(x.errori)?x.errori:[]).filter(e=>e&&typeof e==="object").map(e=>({file:str(e.file),errore:str(e.errore)}))};}
@@ -1354,6 +1354,10 @@ function cartPagamenti(){
   const g=(c.tz.notte.mese+c.tz.fest.mese)/60;if(g>0)out.push(riga(c,"guardia",g,isGuardia,tG));
   if(c.agg>0)out.push(riga(c,"aggiuntiva",c.agg/60,isAggiuntiva,tA));});
  return{righe:out,tG,tA};}
+/* ore di recupero usate nel mese: residuo prec. + saldo − residuo (null se manca il mese prima) */
+function cartUsate(L,y){const i=L.indexOf(y);if(y.recupero==null||y.fatto==null||y.dovuto==null)return null;
+ const pr=i>0&&L[i-1].periodo===ymAdd(y.periodo,-1)?L[i-1]:null,base=pr?pr.recupero:(i===0&&y.recupero===y.fatto-y.dovuto?0:null);
+ if(base==null)return null;return base+(y.fatto-y.dovuto)-y.recupero;}
 const STATO_L={ok:['ok',"pagato"],pagato:['ok',"pagato"],meno:['',"pagate meno ore"],piu:['',"pagate più ore"],manca:['',"non trovato"],attesa:['',"in arrivo"]};
 let CART_SEL=null;
 V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
@@ -1371,9 +1375,9 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  const fer=last.ferie,ferRes=fer.tot!=null?fer.tot:fer.co.residuo+fer.fs.residuo+fer.ap.residuo;
  const anno=last.periodo.slice(0,4),Lanno=L.filter(y=>y.periodo.startsWith(anno));
  const notti=Lanno.reduce((a,y)=>a+y.notti.length,0),fest=Lanno.reduce((a,y)=>a+y.festive.length,0),aggA=Lanno.reduce((a,y)=>a+y.agg,0);
- /* tabella mesi */
- const rows=L.slice().reverse().map(y=>{const s=y.fatto!=null&&y.dovuto!=null?y.fatto-y.dovuto:null;
-  return `<tr class="ced-row ${y.periodo===CART_SEL?"hl":""}" data-act="cart-sel" data-ym="${y.periodo}" tabindex="0"><td>${MESE_L(y.periodo)}</td><td>${hm(y.fatto)}</td><td>${hm(y.dovuto)}</td><td class="${s>0?"pos":s<0?"neg":""}">${hmS(s)}</td><td>${hm(y.recupero)}</td><td>${y.notti.length}</td><td>${y.festive.length}</td><td>${y.agg?hm(y.agg):"—"}</td><td>${y.ferieGiorni.length||"—"}</td><td>${y.ok?(y.provvisorio?'<span class="chip">provvisorio</span>':'<span class="chip ok">definitivo</span>'):'<span class="chip">da controllare</span>'}</td></tr>`;}).join("");
+ /* tabella mesi: residuo = residuo del mese prima + saldo del mese − ore recuperate (causale 9018) */
+ const rows=L.slice().reverse().map(y=>{const s=y.fatto!=null&&y.dovuto!=null?y.fatto-y.dovuto:null,u=cartUsate(L,y);
+  return `<tr class="ced-row ${y.periodo===CART_SEL?"hl":""}" data-act="cart-sel" data-ym="${y.periodo}" tabindex="0"><td>${MESE_L(y.periodo)}</td><td>${hm(y.fatto)}</td><td>${hm(y.dovuto)}</td><td class="${s>0?"pos":s<0?"neg":""}">${hmS(s)}</td><td>${u==null?"—":u?"−"+hm(u)+(y.recGiorni.length?`<br><small class="muted">${y.recGiorni.length} ${y.recGiorni.length===1?"giorno":"giorni"}</small>`:""):"—"}</td><td><b>${hm(y.recupero)}</b></td><td>${y.notti.length}</td><td>${y.festive.length}</td><td>${y.agg?hm(y.agg):"—"}</td><td>${y.ferieGiorni.length||"—"}</td><td>${y.ok?(y.provvisorio?'<span class="chip">provvisorio</span>':'<span class="chip ok">definitivo</span>'):'<span class="chip">da controllare</span>'}</td></tr>`;}).join("");
  /* pagamenti */
  const tipoL={guardia:"Guardia",aggiuntiva:"Aggiuntiva"};
  const pRows=P.righe.slice().reverse().map(r=>{const [cls,lab]=STATO_L[r.stato];
@@ -1390,7 +1394,7 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  return `<section class="sheet">${head}${errs}
  <div class="hero">
   <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}</span></div>
-  <div class="tile"><span class="l">Recupero ore residuo</span><span class="v">${hm(x.recupero)}</span><span class="s">a fine ${MESE_L(x.periodo).toLowerCase()}</span></div>
+  <div class="tile"><span class="l">Recupero ore residuo</span><span class="v">${hm(x.recupero)}</span><span class="s">${(()=>{const i=L.indexOf(x),pr=i>0&&L[i-1].periodo===ymAdd(x.periodo,-1)?L[i-1]:null,u=cartUsate(L,x);return pr&&u!=null?`${hm(pr.recupero)} di ${MESE_L(pr.periodo).toLowerCase().split(" ")[0]} ${hmS(saldo)} saldo${u?" − "+hm(u)+" recuperate":""}`:"a fine "+MESE_L(x.periodo).toLowerCase();})()}</span></div>
   <div class="tile t-liq"><span class="l">Ferie residue</span><span class="v">${nGg(ferRes)}</span><span class="s">congedo ${fN.format(fer.co.residuo)} · festività soppresse ${fN.format(fer.fs.residuo)}${fer.ap.residuo?" · anni prec. "+fN.format(fer.ap.residuo):""} (a ${MESE_L(last.periodo).toLowerCase()})</span></div>
   <div class="tile t-tax"><span class="l">In arrivo nei prossimi cedolini</span><span class="v">${fmt(totArr)}</span><span class="s">lordo stimato: ${inArrivo.length?inArrivo.map(r=>tipoL[r.tipo].toLowerCase()+" "+MESE_L(r.periodo).slice(0,3).toLowerCase()).join(", "):"niente in sospeso"}</span></div>
  </div>
@@ -1406,8 +1410,8 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  </div>
  <div class="box"><h3>Pagamenti di guardie e aggiuntiva</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese lavorato</th><th>Voce</th><th>Ore</th><th>Atteso (lordo)</th><th>Pagato</th><th></th></tr></thead><tbody>${pRows||'<tr><td colspan="6" class="muted">Nessuna guardia o attività aggiuntiva nei cartellini letti.</td></tr>'}</tbody></table></div>
   <p class="note">Atteso = ore × tariffa dell'ultimo cedolino. «In arrivo» finché non c'è il cedolino di due mesi dopo; poi il confronto è con le ore pagate (scarto fino a 15 minuti considerato arrotondamento).</p></div>
- <div class="box"><h3>Mesi</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Fatte</th><th>Dovute</th><th>Saldo</th><th>Recupero residuo</th><th>Notti</th><th>Festive</th><th>Aggiuntiva</th><th>Ferie</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-  <p class="note">Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
+ <div class="box"><h3>Mesi</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Fatte</th><th>Dovute</th><th>Saldo mese</th><th>Recuperate</th><th>Residuo</th><th>Notti</th><th>Festive</th><th>Aggiuntiva</th><th>Ferie</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  <p class="note">Il residuo di recupero ore si muove così: residuo del mese prima + saldo del mese − ore recuperate con riposo (causale 9018, «recupero ore dirigenza»). Il saldo del mese, quindi, non coincide col residuo nei mesi in cui hai preso giorni di recupero. I giorni di riposo compensativo dopo una guardia festiva (9013) sono già nel saldo, come le ore mancanti il giorno prima di una notte. Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
  <div class="box" id="lv-giorni"><h3>Giorni di ${MESE_L(x.periodo).toLowerCase()}${x.calcolo?` <small class="muted">· calcolo del ${dIt(x.calcolo.slice(0,10))}</small>`:""}</h3><div class="tbl-wrap flat"><table class="lv-days"><thead><tr><th>Giorno</th><th>Timbrature</th><th>Causali</th><th>Ore</th><th>Ecc./car.</th></tr></thead><tbody>${days}</tbody></table></div>
   <p class="note"><span class="lv-ta">In corsivo</span> le timbrature di attività aggiuntiva. Le notti iniziano alle 20 e finiscono il mattino dopo: le ore compaiono sul giorno di uscita.</p></div>
 </section>`;};

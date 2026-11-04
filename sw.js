@@ -1,8 +1,8 @@
 // Service worker: rete prima (così gli aggiornamenti arrivano subito), cache se offline.
 // Aumenta VERSION a ogni modifica dei file per aggiornare la cache.
-const VERSION = "v5";
+const VERSION = "v7";
 const CACHE = "gestionale-" + VERSION;
-const FILES = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest",
+const FILES = ["./", "index.html", "styles.css", "app.js", "app.webmanifest",
   "fonts/BricolageGrotesque.woff2", "fonts/IBMPlexSans-400.woff2", "fonts/IBMPlexSans-500.woff2", "fonts/IBMPlexSans-600.woff2",
   "fonts/IBMPlexMono-400.woff2", "fonts/IBMPlexMono-500.woff2",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon48.png", "icons/apple-touch-icon.png"];
