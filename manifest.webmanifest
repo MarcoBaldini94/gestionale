@@ -3,7 +3,7 @@
   "short_name": "Gestionale",
   "description": "Lavoro, entrate, patrimonio, tasse e scadenze personali in un'unica app.",
   "lang": "it",
-  "id": "/gestionale/",
+  "id": "/gestionale/?app=gestionale-2",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
