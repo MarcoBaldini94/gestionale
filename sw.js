@@ -1,7 +1,7 @@
 // Service worker: rete prima (così gli aggiornamenti arrivano subito), cache se offline.
 // Aumenta VERSION a ogni modifica dei file per aggiornare la cache.
-const VERSION = "v2";
-const CACHE = "bilancio-" + VERSION;
+const VERSION = "v4";
+const CACHE = "gestionale-" + VERSION;
 const FILES = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest",
   "fonts/BricolageGrotesque.woff2", "fonts/IBMPlexSans-400.woff2", "fonts/IBMPlexSans-500.woff2", "fonts/IBMPlexSans-600.woff2",
   "fonts/IBMPlexMono-400.woff2", "fonts/IBMPlexMono-500.woff2",
@@ -11,9 +11,10 @@ self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
-  // cancella solo le cache di questa app: le altre web app sulla stessa origine hanno le loro
+  // cancella solo le cache di questa app (prefisso "gestionale-", e "bilancio-" del vecchio nome):
+  // le altre web app sulla stessa origine hanno le loro
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k.startsWith("bilancio-") && k !== CACHE).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => (k.startsWith("gestionale-") || k.startsWith("bilancio-")) && k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", e => {

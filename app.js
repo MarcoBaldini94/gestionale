@@ -44,7 +44,7 @@ const ymOk=v=>/^\d{4}-\d{2}$/.test(v),dOk=v=>/^\d{4}-\d{2}-\d{2}$/.test(v);
 function cleanCed(c){if(!c||typeof c!=="object"||!ymOk(c.periodo))return null;const h=c.intestazione||{},hh={};
   ["imponibileIrpefMese","detrazioniMese","imponibileProgressivo","irpefProgressiva","totaleCompetenze","totaleTrattenute","netto"].forEach(k=>{if(num(h[k])!=null)hh[k]=h[k];});
   const voci=(Array.isArray(c.voci)?c.voci:[]).filter(v=>v&&typeof v==="object").map(v=>({codice:str(v.codice).slice(0,8),descrizione:str(v.descrizione).slice(0,80),
-    categoria:CED_CAT.includes(v.categoria)?v.categoria:"altra_trattenuta",tipo:CED_TIPI.includes(v.tipo)?v.tipo:null,riferimento:ymOk(v.riferimento)?v.riferimento:c.periodo,importo:num(v.importo)??0,...(v.nuova?{nuova:true}:{})}));
+    categoria:CED_CAT.includes(v.categoria)?v.categoria:"altra_trattenuta",tipo:CED_TIPI.includes(v.tipo)?v.tipo:null,riferimento:ymOk(v.riferimento)?v.riferimento:c.periodo,importo:num(v.importo)??0,...(num(v.tariffa)!=null&&num(v.quantita)!=null?{tariffa:v.tariffa,quantita:v.quantita}:{}),...(v.nuova?{nuova:true}:{})}));
   const k=c.controllo||{};
   return{file:str(c.file).slice(0,120),periodo:c.periodo,dataPagamento:dOk(c.dataPagamento)?c.dataPagamento:"",dataAssunzione:dOk(c.dataAssunzione)?c.dataAssunzione:"",intestazione:hh,voci,
     controllo:{ok:k.ok===true,competenze:num(k.competenze),trattenute:num(k.trattenute),netto:num(k.netto)},nuoveVoci:(Array.isArray(c.nuoveVoci)?c.nuoveVoci:[]).map(str)};}
@@ -68,6 +68,7 @@ function sanitize(s){
   o.accantonato=num(s.accantonato);
   o.sondExt=s.sondExt&&/^\d{4}-\d{2}$/.test(s.sondExt.da)?{da:s.sondExt.da,a:/^\d{4}-\d{2}$/.test(s.sondExt.a)?s.sondExt.a:s.sondExt.da,fonte:str(s.sondExt.fonte),agg:str(s.sondExt.agg)}:null;
   o.ced=sanitizeCed(s.ced);
+  o.cart=sanitizeCart(s.cart);
   o.prev={entrate:num(s.prev&&s.prev.entrate),spese:num(s.prev&&s.prev.spese),inv:num(s.prev&&s.prev.inv)};
   o.gen=(Array.isArray(s.gen)?s.gen:[]).filter(x=>typeof x==="string");
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
@@ -310,7 +311,7 @@ const ICO={
  trend:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>'};
 
 /* ================= schede ================= */
-const TABS=[["dashboard","Dashboard"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],["cedolini","Cedolini"],["collegamenti","Collegamenti e backup"]];
+const TABS=[["dashboard","Dashboard"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],["cedolini","Cedolini"],["lavoro","Lavoro"],["collegamenti","Collegamenti e backup"]];
 const V={};
 
 V.dashboard=()=>{const PY=R.PY,TY=R.TY,c=`anni.${TY}`,pv=`anni.${TY-1}`;return `
@@ -1088,7 +1089,7 @@ async function sondSync(manual){
 const MESE_L=ym=>ym?MESI[+ym.slice(5,7)-1]+" "+ym.slice(0,4):"";
 function sondNote(){if(!S.sondExt)return "";
  return `<div class="banner sond-b"><b>Sondaggi automatici</b> da ${MESE_L(S.sondExt.da)}: ogni mese vale la somma dei <b>prelievi</b> registrati nell'app Guadagni sondaggi (le celle con «auto» non si modificano qui). Aggiornato: ${fmtWhen(Date.parse(S.sondExt.agg))}. <a href="#collegamenti">Dettagli</a></div>`;}
-const linkMsgs={hub:"",sond:"",file:"",ced:""};
+const linkMsgs={hub:"",sond:"",file:"",ced:"",cart:""};
 function linkMsg(k,t){linkMsgs[k]=t;const el=document.getElementById("lk-"+k+"-msg");if(el){el.textContent=t;el.hidden=!t;}}
 function hubBadge(){const s=hubState(),url=hubUrl();
  if(!url)return ["off","non attivo"];
@@ -1106,7 +1107,8 @@ function refreshLinks(){
  if(p){p.dataset.s=k;document.getElementById("hdr-sync-t").textContent=k==="warn"?"PC non raggiungibile":"Collegamenti";}
  const b=document.getElementById("lk-hub-badge");if(b){b.textContent=t;b.dataset.s=k;}
  const si=document.getElementById("lk-sond-info");if(si)si.innerHTML=sondInfo();
- const ci=document.getElementById("lk-ced-info");if(ci)ci.innerHTML=cedInfo();}
+ const ci=document.getElementById("lk-ced-info");if(ci)ci.innerHTML=cedInfo();
+ const ki=document.getElementById("lk-cart-info");if(ki)ki.innerHTML=cartInfo();}
 V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
  return `<section class="sheet">
  <div class="sheet-h"><h2>Collegamenti e backup</h2><p>I dati stanno in questo browser. Ogni modifica viene copiata sul PC di casa tramite l'Hub (Tailscale); i prelievi dei sondaggi arrivano da soli dall'app Guadagni sondaggi.</p></div>
@@ -1122,6 +1124,11 @@ V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
   <div class="actions"><button class="btn" data-act="x-ced">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Apri i cedolini</a></div>
   <p class="note" id="lk-ced-msg" ${linkMsgs.ced?"":"hidden"}>${linkMsgs.ced}</p>
   <p class="note">I PDF salvati nella cartella OneDrive «Assistente Finanziario/Cedolini» vengono letti sul PC di casa dall'Hub, senza servizi esterni. Per ogni cedolino con totali e netto verificati, lo stipendio netto entra in Entrate e il lordo di prestazioni aggiuntive e ALPI nella Quota B, nel mese di pagamento.</p></div>
+ <div class="box c-good"><h3>Cartellini presenze</h3>
+  <dl class="kv" id="lk-cart-info">${cartInfo()}</dl>
+  <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#lavoro">Apri Lavoro</a></div>
+  <p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>
+  <p class="note">I PDF salvati nella cartella OneDrive «Assistente Finanziario/Cartellini» (anche in sottocartelle per anno) vengono letti sul PC di casa dall'Hub. Ne ricava ore, ferie, guardie e attività aggiuntiva e le confronta con quanto pagato nei cedolini.</p></div>
  <div class="box"><h3>Backup automatico sul PC</h3>
   <p class="lk-badge"><span id="lk-hub-badge" data-s="${hubBadge()[0]}">${hubBadge()[1]}</span></p>
   <form class="addrow" id="lk-hub-form" autocomplete="off">
@@ -1136,17 +1143,17 @@ V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
   <p class="note">Accetta i file scaricati da qui, i backup dell'Hub e il file di esportazione dall'artefatto claude.ai. L'importazione sostituisce tutti i dati di questo dispositivo.</p></div>
  </div></section>`;};
 function fromAnyBackup(o){if(o&&o.dati&&typeof o.dati==="object")o=o.dati;if(o&&o.data&&o.data.registro)o=o.data;
- if(!o||typeof o!=="object"||!(o.anni||o.registro||o.parametri))throw new Error("il file non sembra un backup del Bilancio personale");return o;}
+ if(!o||typeof o!=="object"||!(o.anni||o.registro||o.parametri))throw new Error("il file non sembra un backup del Gestionale");return o;}
 view.addEventListener("click",async e=>{const b=e.target.closest("[data-act^='x-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
  if(a==="x-sond"){sondSync(true);return;}
  if(a==="x-ced"){cedSync(true,true);return;}
  if(a==="x-hub-now"){if(!hubUrl()){linkMsg("hub","Inserisci prima l'indirizzo dell'Hub.");return;}if(!hasRealData(S)){linkMsg("hub","Non c'è ancora niente da salvare.");return;}hubSync(true);return;}
  if(a==="x-hub-restore"){try{linkMsg("hub","Scarico l'ultimo backup…");const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");const o=fromAnyBackup(r);
    if(hasRealData(S)&&!confirm("Sostituire i dati di questo dispositivo con il backup "+(r.file||"")+"?")){linkMsg("hub","Ripristino annullato.");return;}
-   replaceState(o);linkMsg("hub","Ripristinato "+(r.file||"l'ultimo backup")+".");sondSync(false);cedSync(false);}
+   replaceState(o);linkMsg("hub","Ripristinato "+(r.file||"l'ultimo backup")+".");sondSync(false);cedSync(false);cartSync(false);}
   catch(err){linkMsg("hub","Ripristino non riuscito: "+err.message+".");}return;}
  if(a==="x-exp"){const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});const u=URL.createObjectURL(blob),l=document.createElement("a");
-  l.href=u;l.download="bilancio-personale-"+new Date().toLocaleDateString("sv-SE")+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);linkMsg("file","File scaricato.");return;}
+  l.href=u;l.download="gestionale-"+new Date().toLocaleDateString("sv-SE")+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);linkMsg("file","File scaricato.");return;}
 });
 view.addEventListener("change",async e=>{if(e.target.id!=="lk-imp")return;const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
  try{const o=fromAnyBackup(JSON.parse(await f.text()));
@@ -1281,6 +1288,139 @@ view.addEventListener("click",async e=>{const b=e.target.closest("[data-act='ced
  catch(err){linkMsg("ced","Classificazione non salvata: "+err.message+".");b.disabled=false;}});
 view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-act='ced-sel']");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();r.click();}});
 
+/* ================= lavoro: cartellini presenze (letti in locale dall'Hub) ================= */
+/* L'Hub su PC2 controlla la cartella OneDrive «Cartellini» (anche le sottocartelle per anno), legge ogni PDF
+   in locale e pubblica GET /api/cartellini/archivio. Qui: ore fatte e dovute, recupero ore, ferie, guardie
+   e attività aggiuntiva per mese, e il confronto con quanto pagato nei cedolini (di norma due mesi dopo). */
+const CART_STATE_KEY="bilancio-cart-stato";
+function cartState(){return lsJSON(CART_STATE_KEY)}
+function setCartState(o){lsSet(CART_STATE_KEY,JSON.stringify(Object.assign(cartState(),o)))}
+function minN(v){return typeof v==="number"&&isFinite(v)?Math.round(v):null;}
+function cleanCart(c){if(!c||typeof c!=="object"||!ymOk(c.periodo))return null;
+ const gg=(Array.isArray(c.giorni)?c.giorni:[]).filter(g=>g&&typeof g==="object").map(g=>({g:minN(g.g),dow:str(g.dow).slice(0,3),orario:str(g.orario).slice(0,6),
+  t:(Array.isArray(g.timbrature)?g.timbrature:[]).filter(Boolean).map(t=>[str(t.e),str(t.u),t.tipo==="a"?"a":"o"]),
+  c:(Array.isArray(g.causali)?g.causali:[]).filter(Boolean).map(x=>[str(x.codice).slice(0,8),minN(x.minuti)]),
+  tc:minN(g.totC),ec:minN(g.eccCar)})).filter(g=>g.g);
+ const o=x=>x&&typeof x==="object"?x:{},tz=o(c.totalizzatori),fe=o(c.ferie),rp=o(c.riepilogo),d=o(c.derivati),k=o(c.controllo);
+ const mp=x=>({mese:num(o(x).mese)??0,progr:num(o(x).progr)??0}),fr=x=>({spettanti:num(o(x).spettanti)??0,fruiti:num(o(x).fruiti)??0,decurtati:num(o(x).decurtati)??0,residuo:num(o(x).residuo)??0});
+ const ints=a=>(Array.isArray(a)?a:[]).filter(n=>Number.isInteger(n));
+ const caus={};Object.entries(o(c.causali)).forEach(([a,b])=>{caus[str(a).slice(0,8)]=str(b).slice(0,80);});
+ return{file:str(c.file).slice(0,120),periodo:c.periodo,provvisorio:c.provvisorio===true,calcolo:str(c.ultimoCalcolo).slice(0,19),giorni:gg,
+  fatto:minN(rp.fattoMin),dovuto:minN(rp.dovutoMin),recupero:minN(rp.recuperoResiduoMin),
+  ferie:{fs:fr(fe.festivitaSoppresse),co:fr(fe.congedoOrdinario),ap:fr(fe.residuoAnniPrecedenti),tot:num(o(fe.residueTotali).residuo)},
+  tz:{notte:mp(tz.gettoneNotturnaMin),fest:mp(tz.gettoneFestivaMin),indFest:mp(tz.indennitaFestiva)},
+  agg:minN(d.aggiuntivaMin)??0,aggGiorni:ints(d.aggiuntivaGiorni),notti:ints(d.notti),festive:ints(d.festive),ferieGiorni:ints(d.ferieGiorni),causali:caus,ok:k.ok===true};}
+function sanitizeCart(x){if(!x||typeof x!=="object")return null;
+ return{agg:str(x.agg),lista:(Array.isArray(x.lista)?x.lista:[]).map(cleanCart).filter(Boolean),
+  errori:(Array.isArray(x.errori)?x.errori:[]).filter(e=>e&&typeof e==="object").map(e=>({file:str(e.file),errore:str(e.errore)}))};}
+function applyCart(arch){
+ const prima=JSON.stringify(S.cart||null);
+ const lista=(arch.cartellini||[]).map(cleanCart).filter(Boolean).sort((a,b)=>(a.periodo+a.calcolo).localeCompare(b.periodo+b.calcolo));
+ const per={};lista.forEach(c=>{const p=per[c.periodo];if(!p||(c.ok&&!p.ok)||(c.ok===p.ok&&c.calcolo>=p.calcolo))per[c.periodo]=c;}); // un cartellino per mese: il ricalcolo più recente
+ S.cart={agg:str(arch.aggiornato),lista:Object.keys(per).sort().map(k=>per[k]),errori:(arch.errori||[]).map(e=>({file:str(e.file),errore:str(e.errore)}))};
+ return JSON.stringify(S.cart)!==prima;}
+let cartBusy=false;
+async function cartSync(manual,rileggi){
+ if(cartBusy)return;
+ if(!hubUrl()){if(manual)linkMsg("cart","Serve l'indirizzo dell'Hub (Collegamenti e backup › Backup automatico sul PC).");return;}
+ cartBusy=true;if(manual)linkMsg("cart",rileggi?"Chiedo al PC di rileggere la cartella…":"Controllo i cartellini…");
+ try{const r=rileggi?await hubFetch("/api/cartellini/aggiorna",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}):await hubFetch("/api/cartellini/archivio");
+  const changed=applyCart(r);setCartState({check:Date.now(),err:""});
+  if(changed)scheduleSave();
+  if(changed||current==="lavoro")afterExternalChange();
+  if(manual)linkMsg("cart",changed?"Cartellini aggiornati.":"Già aggiornato: nessuna differenza.");}
+ catch(e){setCartState({check:Date.now(),err:e.message});if(manual)linkMsg("cart","Cartellini non letti: "+e.message+".");}
+ finally{cartBusy=false;refreshLinks();}}
+/* ore: minuti -> "h:mm" */
+const hm=m=>m==null?"—":(m<0?"−":"")+Math.floor(Math.abs(m)/60)+":"+String(Math.abs(m)%60).padStart(2,"0");
+const hmS=m=>m==null?"—":(m>0?"+":"")+hm(m);
+const oreDec=m=>Math.round(m/60*100)/100;
+const ymAdd=(ym,n)=>{const d=new Date(+ym.slice(0,4),+ym.slice(5,7)-1+n,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");};
+const nGg=n=>n===1?"1 giorno":(Number.isInteger(n)?n:fN.format(n))+" giorni";
+/* Voci del cedolino collegate al cartellino: guardia a ore (variabile) e attività aggiuntiva (prestazioni aggiuntive). */
+const isGuardia=v=>v.categoria==="competenza"&&(v.codice==="20169"||(v.tipo==="variabile"&&/GUARDIA/i.test(v.descrizione)));
+const isAggiuntiva=v=>v.categoria==="competenza"&&(v.codice==="28070"||(v.tipo==="prestazioni_aggiuntive"&&/LISTE|AGGIUNT/i.test(v.descrizione)));
+function cartPagamenti(){
+ const ced=(S.ced?S.ced.lista:[]).filter(c=>c.controllo.ok),voci=ced.flatMap(c=>c.voci.map(v=>({...v,ced:c.periodo})));
+ const ultimaTariffa=f=>{const v=voci.filter(f).filter(v=>num(v.tariffa)).sort((a,b)=>a.ced.localeCompare(b.ced)).pop();return v?v.tariffa:null;};
+ const tG=ultimaTariffa(isGuardia),tA=ultimaTariffa(isAggiuntiva),ultimoCed=ced.map(c=>c.periodo).sort().pop()||"";
+ const riga=(c,tipo,ore,f,tar)=>{const vv=voci.filter(v=>f(v)&&v.riferimento===c.periodo);
+  const pag=vv.length?{importo:vv.reduce((a,v)=>a+v.importo,0),ore:vv.every(v=>num(v.quantita)!=null)?vv.reduce((a,v)=>a+v.quantita,0):null,ced:[...new Set(vv.map(v=>v.ced))]}:null;
+  const atteso=ymAdd(c.periodo,2),stima=tar!=null?Math.round(ore*tar*100)/100:null;
+  let stato;if(pag){const d=pag.ore!=null?pag.ore-ore:null;stato=d==null?"pagato":Math.abs(d)<=0.25?"ok":d<0?"meno":"piu";}
+  else stato=ultimoCed>=atteso?"manca":"attesa";
+  return{periodo:c.periodo,tipo,ore,stima,pag,atteso,stato};};
+ const out=[];(S.cart?S.cart.lista:[]).forEach(c=>{
+  const g=(c.tz.notte.mese+c.tz.fest.mese)/60;if(g>0)out.push(riga(c,"guardia",g,isGuardia,tG));
+  if(c.agg>0)out.push(riga(c,"aggiuntiva",c.agg/60,isAggiuntiva,tA));});
+ return{righe:out,tG,tA};}
+const STATO_L={ok:['ok',"pagato"],pagato:['ok',"pagato"],meno:['',"pagate meno ore"],piu:['',"pagate più ore"],manca:['',"non trovato"],attesa:['',"in arrivo"]};
+let CART_SEL=null;
+V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
+ const head=`<div class="sheet-h"><h2>Lavoro</h2><p>Ore, ferie, guardie e attività aggiuntiva dai cartellini presenze nella cartella OneDrive «Assistente Finanziario/Cartellini». La lettura avviene sul PC di casa (Hub); qui arrivano solo orari, causali e totali, senza dati anagrafici.</p></div>
+ <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Cedolini</a></div>
+ <p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>`;
+ const errs=c&&(c.errori.length||L.some(x=>!x.ok))?`<div class="box c-tax"><h3>Da controllare</h3>${L.filter(x=>!x.ok).map(x=>`<p class="note"><b>${esc(x.file)}</b> (${MESE_L(x.periodo)}): le somme dei giorni non tornano con i totali stampati. I numeri di questo mese vanno verificati sul PDF.</p>`).join("")}
+  ${c.errori.map(e=>`<p class="note"><b>${esc(e.file)}</b>: non leggibile (${esc(e.errore)}).</p>`).join("")}</div>`:"";
+ if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cartellino ancora. ${hubUrl()?"Salva i PDF nella cartella Cartellini (anche in una sottocartella per anno) e premi «Aggiorna ora»: il PC li legge entro un minuto.":"Imposta prima l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div>${errs}</section>`;
+ if(!CART_SEL||!L.some(x=>x.periodo===CART_SEL))CART_SEL=L[L.length-1].periodo;
+ const x=L.find(y=>y.periodo===CART_SEL),last=L[L.length-1];
+ const P=cartPagamenti(),inArrivo=P.righe.filter(r=>r.stato==="attesa"),daVerif=P.righe.filter(r=>["meno","piu","manca"].includes(r.stato));
+ const totArr=inArrivo.reduce((a,r)=>a+(r.stima||0),0);
+ const saldo=x.fatto!=null&&x.dovuto!=null?x.fatto-x.dovuto:null;
+ const fer=last.ferie,ferRes=fer.tot!=null?fer.tot:fer.co.residuo+fer.fs.residuo+fer.ap.residuo;
+ const anno=last.periodo.slice(0,4),Lanno=L.filter(y=>y.periodo.startsWith(anno));
+ const notti=Lanno.reduce((a,y)=>a+y.notti.length,0),fest=Lanno.reduce((a,y)=>a+y.festive.length,0),aggA=Lanno.reduce((a,y)=>a+y.agg,0);
+ /* tabella mesi */
+ const rows=L.slice().reverse().map(y=>{const s=y.fatto!=null&&y.dovuto!=null?y.fatto-y.dovuto:null;
+  return `<tr class="ced-row ${y.periodo===CART_SEL?"hl":""}" data-act="cart-sel" data-ym="${y.periodo}" tabindex="0"><td>${MESE_L(y.periodo)}</td><td>${hm(y.fatto)}</td><td>${hm(y.dovuto)}</td><td class="${s>0?"pos":s<0?"neg":""}">${hmS(s)}</td><td>${hm(y.recupero)}</td><td>${y.notti.length}</td><td>${y.festive.length}</td><td>${y.agg?hm(y.agg):"—"}</td><td>${y.ferieGiorni.length||"—"}</td><td>${y.ok?(y.provvisorio?'<span class="chip">provvisorio</span>':'<span class="chip ok">definitivo</span>'):'<span class="chip">da controllare</span>'}</td></tr>`;}).join("");
+ /* pagamenti */
+ const tipoL={guardia:"Guardia",aggiuntiva:"Aggiuntiva"};
+ const pRows=P.righe.slice().reverse().map(r=>{const [cls,lab]=STATO_L[r.stato];
+  return `<tr><td>${MESE_L(r.periodo)}</td><td>${tipoL[r.tipo]}</td><td>${hm(Math.round(r.ore*60))}</td><td>${r.stima!=null?fmt(r.stima):"—"}</td><td>${r.pag?fmt(r.pag.importo)+(r.pag.ore!=null?`<br><small class="muted">${fN.format(r.pag.ore)} h · cedolino di ${r.pag.ced.map(MESE_L).join(", ").toLowerCase()}</small>`:""):`<small class="muted">atteso con il cedolino di ${MESE_L(r.atteso).toLowerCase()}</small>`}</td><td><span class="chip ${cls}">${lab}</span></td></tr>`;}).join("");
+ /* giorni del mese selezionato */
+ const cl=(cod)=>x.causali[cod]||cod;
+ const days=x.giorni.map(g=>{const tags=[];
+  if(x.notti.includes(g.g))tags.push('<span class="chip lv-n">notte</span>');
+  if(x.festive.includes(g.g))tags.push('<span class="chip lv-f">guardia festiva</span>');
+  g.c.forEach(([cod,m])=>tags.push(`<span class="chip ${x.ferieGiorni.includes(g.g)&&cod==="1000"?"lv-fe":x.aggGiorni.includes(g.g)&&m!=null?"lv-a":""}" title="${esc(cl(cod))}">${esc(cod==="1000"?"ferie":cod==="000038"?"aggiuntiva":cl(cod).split(" (")[0].toLowerCase())}${m!=null?" "+hm(m):""}</span>`));
+  const tt=g.t.map(([e,u,k])=>`<span class="${k==="a"?"lv-ta":""}">${e||"?"}–${u||"?"}</span>`).join(" ");
+  const we=g.dow==="sab"||g.dow==="dom";
+  return `<tr class="${we?"lv-we":""}"><td>${g.g} <small class="muted">${g.dow}</small></td><td class="lv-t">${tt||'<span class="muted">—</span>'}</td><td>${tags.join(" ")}</td><td>${g.tc!=null?hm(g.tc):""}</td><td class="${g.ec>0?"pos":g.ec<0?"neg":""}">${g.ec!=null?hmS(g.ec):""}</td></tr>`;}).join("");
+ return `<section class="sheet">${head}${errs}
+ <div class="hero">
+  <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}</span></div>
+  <div class="tile"><span class="l">Recupero ore residuo</span><span class="v">${hm(x.recupero)}</span><span class="s">a fine ${MESE_L(x.periodo).toLowerCase()}</span></div>
+  <div class="tile t-liq"><span class="l">Ferie residue</span><span class="v">${nGg(ferRes)}</span><span class="s">congedo ${fN.format(fer.co.residuo)} · festività soppresse ${fN.format(fer.fs.residuo)}${fer.ap.residuo?" · anni prec. "+fN.format(fer.ap.residuo):""} (a ${MESE_L(last.periodo).toLowerCase()})</span></div>
+  <div class="tile t-tax"><span class="l">In arrivo nei prossimi cedolini</span><span class="v">${fmt(totArr)}</span><span class="s">lordo stimato: ${inArrivo.length?inArrivo.map(r=>tipoL[r.tipo].toLowerCase()+" "+MESE_L(r.periodo).slice(0,3).toLowerCase()).join(", "):"niente in sospeso"}</span></div>
+ </div>
+ ${daVerif.length?`<div class="box c-tax"><h3>Pagamenti da verificare</h3>${daVerif.map(r=>`<p class="note"><b>${tipoL[r.tipo]} di ${MESE_L(r.periodo).toLowerCase()}</b>: ${r.stato==="manca"?`nel cedolino di ${MESE_L(r.atteso).toLowerCase()} non c'è (${hm(Math.round(r.ore*60))} ore dal cartellino).`:`pagate ${fN.format(r.pag.ore)} ore, dal cartellino ne risultano ${fN.format(oreDec(Math.round(r.ore*60)))}.`}</p>`).join("")}</div>`:""}
+ <div class="grid">
+  <div class="box"><h3>Guardie e aggiuntiva · ${anno}</h3><dl class="kv">
+   ${kv("Notti di guardia",String(notti))}${kv("Guardie festive diurne",String(fest))}${kv("Ore di attività aggiuntiva",hm(aggA))}
+   ${kv("Tariffa guardia (ultimo cedolino)",P.tG!=null?fmt(P.tG)+"/h":"—")}${kv("Tariffa aggiuntiva (ultimo cedolino)",P.tA!=null?fmt(P.tA)+"/h":"—")}</dl>
+   <p class="note">Guardie e aggiuntiva di un mese si pagano di norma con il cedolino di due mesi dopo. Ore di guardia = ore gettone notturne + festive del cartellino. Le ore di aggiuntiva pagate sono quelle certificate nel report della U.O.C. Libera Professione, che può arrotondare rispetto alle timbrature.</p></div>
+  <div class="box"><h3>Ferie ${anno}</h3><dl class="kv">
+   ${kv("Congedo ordinario spettante",nGg(fer.co.spettanti))}${kv("Goduti",nGg(fer.co.fruiti))}${kv("Festività soppresse residue",nGg(fer.fs.residuo))}${fer.ap.residuo?kv("Residuo anni precedenti",nGg(fer.ap.residuo)):""}${kv("Residue totali",nGg(ferRes))}</dl>
+   <p class="note">${Lanno.filter(y=>y.ferieGiorni.length).map(y=>MESE_L(y.periodo)+": "+y.ferieGiorni.join(", ")).join(" · ")||"Nessun giorno di ferie nei cartellini letti."}</p></div>
+ </div>
+ <div class="box"><h3>Pagamenti di guardie e aggiuntiva</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese lavorato</th><th>Voce</th><th>Ore</th><th>Atteso (lordo)</th><th>Pagato</th><th></th></tr></thead><tbody>${pRows||'<tr><td colspan="6" class="muted">Nessuna guardia o attività aggiuntiva nei cartellini letti.</td></tr>'}</tbody></table></div>
+  <p class="note">Atteso = ore × tariffa dell'ultimo cedolino. «In arrivo» finché non c'è il cedolino di due mesi dopo; poi il confronto è con le ore pagate (scarto fino a 15 minuti considerato arrotondamento).</p></div>
+ <div class="box"><h3>Mesi</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Fatte</th><th>Dovute</th><th>Saldo</th><th>Recupero residuo</th><th>Notti</th><th>Festive</th><th>Aggiuntiva</th><th>Ferie</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  <p class="note">Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
+ <div class="box" id="lv-giorni"><h3>Giorni di ${MESE_L(x.periodo).toLowerCase()}${x.calcolo?` <small class="muted">· calcolo del ${dIt(x.calcolo.slice(0,10))}</small>`:""}</h3><div class="tbl-wrap flat"><table class="lv-days"><thead><tr><th>Giorno</th><th>Timbrature</th><th>Causali</th><th>Ore</th><th>Ecc./car.</th></tr></thead><tbody>${days}</tbody></table></div>
+  <p class="note"><span class="lv-ta">In corsivo</span> le timbrature di attività aggiuntiva. Le notti iniziano alle 20 e finiscono il mattino dopo: le ore compaiono sul giorno di uscita.</p></div>
+</section>`;};
+function cartInfo(){const cs=cartState(),c=S.cart,L=c?c.lista:[];
+ return [["Cartellini letti",c?L.filter(x=>x.ok).length+" verificati"+(L.some(x=>!x.ok)?", "+L.filter(x=>!x.ok).length+" da controllare":"")+(c.errori.length?", "+c.errori.length+" illeggibili":""):"—"],
+  ["Mesi",L.length?MESE_L(L[0].periodo)+" – "+MESE_L(L[L.length-1].periodo):"nessuno"],
+  ["Ultima lettura sul PC",c&&c.agg?fmtWhen(Date.parse(c.agg)):"—"],
+  ["Ultimo controllo",cs.err?"non riuscito ("+esc(cs.err)+")":fmtWhen(cs.check)]].map(([a,b])=>`<dt>${a}</dt><dd class="txtv">${b}</dd>`).join("");}
+view.addEventListener("click",e=>{const b=e.target.closest("[data-act='cart-sel'],[data-act='x-cart']");if(!b)return;
+ if(b.dataset.act==="x-cart"){e.preventDefault();cartSync(true,true);return;}
+ CART_SEL=b.dataset.ym;render();const t=document.getElementById("lv-giorni");if(t)t.scrollIntoView({behavior:"smooth",block:"start"});});
+view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr[data-act='cart-sel']");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();r.click();}});
+
 /* ================= avvio ================= */
 (function init(){
  const raw=lsGet(LS_KEY);
@@ -1289,11 +1429,11 @@ view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("
  else{S=load(null);status("busy","Nessun dato: importa o ripristina un backup");}
  render();refreshLinks();
  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
- setTimeout(()=>{sondSync(false);cedSync(false);hubSync(false);},1200);
- document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);hubSync(false);}
+ setTimeout(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);},1200);
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);cartSync(false);hubSync(false);}
   else if(dirty)save();});
  window.addEventListener("pagehide",()=>{if(dirty)save();});
- window.addEventListener("online",()=>{sondSync(false);cedSync(false);hubSync(false);});
+ window.addEventListener("online",()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);});
  window.addEventListener("storage",e=>{
   if(e.key===SOND_LS_KEY)sondSync(false);
   else if(e.key===LS_KEY&&e.newValue&&!dirty){try{S=load(JSON.parse(e.newValue));afterExternalChange();}catch(_){}}});

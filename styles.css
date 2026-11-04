@@ -553,3 +553,15 @@ table.ced-det tr.ced-tot td{color:var(--fg);font-size:13px;background:var(--acce
 .ced-nv label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
 .ced-nv select.in{width:100%;min-width:0}
 .chip.ok{color:var(--good)}
+
+/* ---- scheda Lavoro (cartellini) ---- */
+table.lv-days td{vertical-align:top}
+table.lv-days tr.lv-we td{background:var(--surface-2)}
+.lv-t{font-family:var(--f-mono);font-size:12px;white-space:nowrap}
+.lv-t span{margin-right:6px}
+.lv-ta{font-style:italic;color:var(--ent-t)}
+.chip.lv-n{color:var(--inv);border-color:color-mix(in srgb,var(--inv) 35%,var(--line))}
+.chip.lv-f{color:var(--tax);border-color:color-mix(in srgb,var(--tax) 35%,var(--line))}
+.chip.lv-a{color:var(--ent-t);border-color:color-mix(in srgb,var(--ent-t) 35%,var(--line))}
+.chip.lv-fe{color:var(--liq-t);border-color:color-mix(in srgb,var(--liq-t) 35%,var(--line))}
+@media (max-width:560px){.lv-t{white-space:normal}.lv-t span{display:block;margin:0}}
