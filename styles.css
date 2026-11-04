@@ -497,11 +497,11 @@ table.sv2 tfoot td:first-child{font-family:var(--f-body)}
 .btn.ghost{background:transparent;border-color:var(--line);color:var(--muted)}
 .btn.ghost:hover{color:var(--accent);border-color:var(--accent)}
 .banner .btn{margin-left:8px}
-form.addrow{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
-form.addrow label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
+form.addrow,div.addrow{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
+form.addrow label,div.addrow label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
 form.addrow label input.in,form.addrow label select.in{min-width:150px}
-form.addrow label.grow{flex:1 1 240px}
-form.addrow label.grow input.in{min-width:0;width:100%}
+form.addrow label.grow,div.addrow label.grow{flex:1 1 240px}
+form.addrow label.grow input.in,div.addrow label.grow input.in{min-width:0;width:100%}
 select.in.sel{text-align:left;font-family:var(--f-body);min-width:190px;cursor:pointer;appearance:auto}
 .tbl-wrap.flat{box-shadow:none;border:0;border-radius:0;background:transparent}
 .tbl-wrap.flat th:first-child{border-top-left-radius:8px}
@@ -623,3 +623,34 @@ body[data-sez="sondaggi"] nav.tabs{box-shadow:inset 0 -3px 0 var(--band-muted)}
 .sv-ctr{grid-template-columns:minmax(0,1fr)}.sv-ctr>*{min-width:0}
 .sv-ctr-e .in{flex:1 1 0;min-width:0;width:100%}
 .sv-padd .in{min-width:0}
+
+/* selettore tema chiaro / scuro (header) */
+button.hdr-pill{font:inherit;font-size:12px;cursor:pointer}
+#hdr-theme-i{font-size:13px;line-height:1}
+/* Sondaggi: dashboard con due ciambelle proporzionali, legenda comune, colonne 12 mesi; sottoschede */
+.pcard-main.sv-main{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;justify-content:stretch;min-width:0}
+.sv-pair{display:flex;justify-content:center;align-items:flex-end;gap:12px 36px;flex-wrap:wrap}
+.sv-dn{margin:0;display:grid;justify-items:center;gap:6px}
+.sv-dn-c{display:grid;place-items:center}
+.sv-dn figcaption{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+table.sv-leg{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed}
+.sv-leg th:first-child{width:44%}.sv-leg td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv-leg th{background:none;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line)}
+.sv-leg th:first-child,.sv-leg td:first-child{text-align:left}
+.sv-leg td{padding:6px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--f-mono)}
+.sv-leg td:first-child{font-family:var(--f-body)}
+.sv-leg tfoot td{font-weight:600;border-bottom:0}
+.sv-12{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:6px}
+.sv-12 h4{margin:0;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.sv-12 .note{margin:0}
+.sv-nav{flex-wrap:wrap}input.in.sv-pick{width:150px;min-width:0;flex:0 0 auto;text-align:left;font-family:var(--f-body)}
+.sv-bal{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:2px 2px 0}
+.sv-bal b{font-family:var(--f-mono);font-size:19px;letter-spacing:0;color:var(--t-liq)}.sv-bal b.neg{color:var(--neg)}
+.sv-plist{display:grid;gap:0}
+.sv-plist .sv-pi{padding:10px 0;border-bottom:1px solid var(--line)}.sv-plist .sv-pi:last-child{border-bottom:0}
+.sv-pi-s{font-weight:600;min-width:150px}.sv-pi > b{color:var(--tax);min-width:80px}
+.sv-pi-a{display:flex;gap:6px;margin-left:auto}
+.sv-ptot{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted);margin-bottom:6px}.sv-ptot b{font-family:var(--f-mono);color:var(--tax);margin-left:4px}
+.sv-padd label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.sv-padd select.in.sel{min-width:160px}
+@media (max-width:560px){.pcard-main.sv-main{display:grid}table.sv-leg{font-size:12.5px}.sv-leg td,.sv-leg th{padding:5px 3px}.sv-pair{gap:12px 20px}.sv-pi-s{min-width:0;flex-basis:100%}.sv-pi-a{margin-left:0}.sv-padd label{flex:1 1 140px}}

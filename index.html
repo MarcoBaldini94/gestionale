@@ -11,13 +11,15 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Gestionale">
 <link rel="preload" href="fonts/IBMPlexSans-400.woff2" as="font" type="font/woff2" crossorigin>
+<script>try{var t=localStorage.getItem("gestionale-tema");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="#home" title="Home"><svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true"><rect width="38" height="38" rx="11" style="fill:var(--hero)"/><path d="M11.1 14.1H26.9M11.1 14.1L19 26.7M26.9 14.1L19 26.7" stroke="#9cc0d3" stroke-width="1.7" stroke-linecap="round"/><circle cx="11.1" cy="14.1" r="4.3" fill="#2a9d8f"/><circle cx="26.9" cy="14.1" r="4.3" style="fill:var(--tasse)"/><circle cx="19" cy="26.7" r="4.3" style="fill:var(--band-fg)"/></svg>
   <h1>Gestionale<small>Lavoro · Finanze · Sondaggi</small></h1></a>
-  <div class="hdr-r"><a id="hdr-par" href="#parametri" title="Parametri fiscali e previdenziali"><span aria-hidden="true">⚙</span> Parametri</a>
+  <div class="hdr-r"><button type="button" id="hdr-theme" class="hdr-pill" title="Passa al tema scuro" aria-label="Passa al tema scuro"><span aria-hidden="true" id="hdr-theme-i">☾</span> <span id="hdr-theme-t">Scuro</span></button>
+  <a id="hdr-par" href="#parametri" title="Parametri fiscali e previdenziali"><span aria-hidden="true">⚙</span> Parametri</a>
   <a id="hdr-sync" class="hdr-pill" href="#collegamenti" title="Backup sul PC e collegamento con l'app Guadagni sondaggi"><span aria-hidden="true">⇄</span> <span id="hdr-sync-t">Collegamenti</span></a>
   <div class="status" id="status" data-s="busy" role="status"><i></i><span id="status-t">Caricamento…</span></div></div>
 </div></header>

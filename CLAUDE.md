@@ -41,7 +41,7 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - Ogni sezione ha una dashboard con lo stesso schema di Finanze (box `pcard`: ciambella principale + sotto-schede `a.psub` che si aprono al primo tocco e portano alla scheda al secondo):
   - Finanze `#dashboard` → patrimonio, scadenzario, entrate, tasse, andamento, mese, parametri (invariata).
   - Lavoro `#lavoro` → `#presenze` (ore, recupero, ferie, mesi, giorni), `#lv-pag` (guardie, aggiuntiva, pagamenti), `#cedolini`.
-  - Sondaggi `#sondaggi` → `#sond-mese` (inserimento del mese, in attesa, piattaforme), `#sond-storico` (grafico, tabelle, mesi passati).
+  - Sondaggi `#sondaggi` (due ciambelle guadagni/prelievi dell'anno per piattaforma, area ∝ totale, legenda comune; colonne guadagni vs prelievi ultimi 12 mesi) → `#sond-mese` «Mese corrente» (solo guadagni per mese e piattaforma, mese scelto con frecce o selettore; aggiunta/rimozione piattaforme), `#sond-attesa` «In attesa di approvazione» (unico punto per importi in attesa: aggiungi con piattaforma, conferma → guadagni del mese scelto, rimuovi), `#sond-saldo` «Saldo sui portali» (saldo = Σg − Σp di sempre per piattaforma; prelievi del mese con frecce/selettore), `#sond-storico` (sola lettura: grafico per anno, tabelle guadagni/prelievi).
 - `PARENT`/`parentOf()`: il pulsante ‹ torna alla dashboard della sezione; `body[data-sez]` colora la barra.
 - `donut(…, fv)` e `li(…, fv)` accettano un formattatore (ore, giorni) e colori esadecimali.
 
@@ -59,6 +59,9 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - `cartPagamenti()`: per ogni mese M, guardia (ore gettone notturne + festive) e aggiuntiva confrontate con le voci dei cedolini verificati con `riferimento = M` (20169 guardia, 28070 aggiuntiva; tariffa e quantità lette dal cedolino). Stato: pagato (scarto ≤ 15 min), meno/più ore, non trovato (se esiste già il cedolino di M+2), in arrivo.
 - Non modifica Entrate: è solo lettura + previsione.
 - Trigger: avvio, `visibilitychange`, `online`, ripristino, «Aggiorna ora». Stato in localStorage `bilancio-cart-stato`.
+
+## Tema chiaro / scuro
+- Pulsante ☾/☀ nell'header (`#hdr-theme`). Senza scelta segue il sistema; la scelta va in localStorage `gestionale-tema` (`light`/`dark`) e viene applicata in `index.html` prima del CSS (niente lampo). Imposta `data-theme` su `<html>`: i token dark in `styles.css` esistono sia per `prefers-color-scheme` sia per `[data-theme="dark"]`. Aggiorna anche `meta theme-color`.
 
 ## Scheda «Collegamenti e backup» (`#collegamenti`)
 Stato sondaggi, cedolini, cartellini, Hub (salva e prova / backup ora / ripristina), backup su file (scarica / importa: accetta S v3, risposta Hub `{dati}`, dump db artefatto).
