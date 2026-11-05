@@ -25,6 +25,7 @@ img{max-width:100%}
   --qa:#e9b04a; --qb:#d9822b; --imp:#8c4a1e; --fisse:#e0857a; --warn:#925e00; --input-bg:#f3f8fb; --input-fg:#0f4e72;
   --input-line:#b7d3e3;
   --inv-t:var(--inv); --fondo-t:var(--fondo);
+  --aff:#a33c6b; --aff-t:#93305d; --c-aff:var(--aff); --t-aff:var(--aff-t);
   --c-liq:var(--liq);--c-fin:var(--fin);--c-rev:var(--rev);--c-inv:var(--inv);--c-fondo:var(--fondo);--c-etf:var(--etf);--c-spese:var(--spese);--c-tasse:var(--tasse);--c-risp:var(--risp);--c-ent:var(--ent);--c-fisse:var(--fisse);
   --t-liq:var(--liq-t);--t-fin:var(--liq-t);--t-rev:var(--rev-t);--t-inv:var(--inv);--t-fondo:var(--inv);--t-etf:var(--etf-t);--t-spese:var(--neg);--t-tasse:var(--tax);--t-risp:var(--good);--t-ent:var(--ent-t);--t-fisse:var(--neg);
   --link:var(--accent);
@@ -42,6 +43,7 @@ img{max-width:100%}
   --good-2:#3d6b22; --spese:#e8675a; --neg:#f07d71; --neg-soft:#3a1c1a; --tasse:#eb9a4a; --tax:#f0a75c; --tax-soft:#3a2612;
   --qa:#f2c56a; --qb:#eb9a4a; --imp:#c27a4a; --fisse:#f0a39a; --warn:#e6b04a; --input-bg:#142632; --input-fg:#bfe3f6;
   --input-line:#2e5268;
+  --aff:#e07fa8; --aff-t:#ec9cbd;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0a1218; --surface:#121c24; --surface-2:#17242e; --fg:#e3ecf1; --muted:#93a6b2; --line:#233441; --band:#072636;
@@ -51,6 +53,7 @@ img{max-width:100%}
   --good-2:#3d6b22; --spese:#e8675a; --neg:#f07d71; --neg-soft:#3a1c1a; --tasse:#eb9a4a; --tax:#f0a75c; --tax-soft:#3a2612;
   --qa:#f2c56a; --qb:#eb9a4a; --imp:#c27a4a; --fisse:#f0a39a; --warn:#e6b04a; --input-bg:#142632; --input-fg:#bfe3f6;
   --input-line:#2e5268;
+  --aff:#e07fa8; --aff-t:#ec9cbd;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}
 .nt-tasse{color:var(--t-tasse)}.nt-spese{color:var(--t-spese)}.nt-risp{color:var(--t-risp)}.nt-liq{color:var(--t-liq)}.nt-inv{color:var(--t-inv)}.nt-ent{color:var(--t-ent)}
 .pleg li.sitem > span .sd{font-family:var(--f-mono);margin-right:4px;color:var(--muted)}.pleg li.sitem.paid > span{color:var(--muted)}
@@ -683,3 +686,6 @@ table.ric select.ricfreq{width:92px;min-width:0}
 table.ric td select.mesesel{width:130px;min-width:0}
 label.ricda{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)}
 label.ricda input.in{width:130px;min-width:0;text-align:left;font-family:var(--f-body);font-size:12.5px}
+
+/* affitto: sottovoce delle spese fisse (Uso delle entrate, Entrate e uscite, Andamento, Resoconto) */
+.nt-aff{color:var(--t-aff)}.nc-aff{background:var(--c-aff)}

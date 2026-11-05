@@ -242,14 +242,17 @@ function calc(s){
   R.eff={};s.scadenzario.forEach((r,i)=>{if(r.anno!=null&&tipoOf(r)&&isF(r))R.eff[r.anno]=(R.eff[r.anno]||0)+rows[i].imp;});
   /* risparmio mese per mese (anno PY); medie sugli ultimi 3 mesi completi, anche a cavallo d'anno */
   const pad=m=>String(m+1).padStart(2,"0");
-  const svOf=Y=>{const o=R.patr[Y],p=s.patrimonio[Y],sv={ent:[],risp:[],tasso:[],tasse:[],fisse:[],spese:[],inv:[],acc:[],rn:[],spT:[]},T=R.anni[Y];
+  /* affitto = righe pagate delle spese fisse la cui voce contiene «affitto» (parte delle spese fisse) */
+  const isAff=r=>!!(r.ric&&TPL[r.ric]&&/affitt/i.test(TPL[r.ric].voce||r.voce||""));
+  const svOf=Y=>{const o=R.patr[Y],p=s.patrimonio[Y],sv={ent:[],risp:[],tasso:[],tasse:[],fisse:[],spese:[],inv:[],acc:[],rn:[],spT:[],aff:[]},T=R.anni[Y];
    MESI.forEach((_,m)=>{const pref=`${Y}-${pad(m)}`;
     const ent=sum(s.registro.filter(r=>r.data.startsWith(pref)&&IN_TOT(r.fonte)).map(r=>r.importo));
     const tas=sum(s.scadenzario.map((r,i)=>isF(r)&&paidOf(r)&&(SD(r)||r.dataPag||"").startsWith(pref)?rows[i].imp:0));
     const fis=sum(s.scadenzario.map((r,i)=>!isF(r)&&paidOf(r)&&SD(r).startsWith(pref)?rows[i].imp:0));
+    const aff=sum(s.scadenzario.map((r,i)=>!isF(r)&&isAff(r)&&paidOf(r)&&SD(r).startsWith(pref)?rows[i].imp:0));
     const prevD=m===0?o.prevClose:o.D[m-1];const ok=o.D[m]>0&&prevD>0;
     const inv=n(p[m].vEtf)+fondoFlow(s,Y,m),risp=ok?o.D[m]-prevD+inv:null;
-    sv.ent.push(ok?ent:null);sv.inv.push(ok?inv:null);sv.risp.push(risp);sv.tasse.push(ok?tas:null);sv.fisse.push(ok?fis:null);
+    sv.ent.push(ok?ent:null);sv.inv.push(ok?inv:null);sv.risp.push(risp);sv.tasse.push(ok?tas:null);sv.fisse.push(ok?fis:null);sv.aff.push(ok?aff:null);
     sv.spese.push(ok?ent-risp-tas-fis:null);sv.tasso.push(ok&&ent>0?risp/ent:null);
     /* tasse da accantonare nel mese (competenza): 1/12 di Quota A + Quota B e imposta maturate sulle entrate del mese */
     const dY=a=>a?a[m]-(m?a[m-1]:0):0,acc=ok&&T?T.qa/12+dY(T.ytd.qb)+dY(T.ytd.imp):(ok?0:null);
@@ -259,17 +262,17 @@ function calc(s){
   const okM=sv.risp.map((v,i)=>v!=null?i:-1).filter(i=>i>=0);
   const pool=[...(svP?svP.risp.map((v,i)=>v!=null?{o:svP,i,Y:PY-1}:null).filter(Boolean):[]),...okM.map(i=>({o:sv,i,Y:PY}))],l3=pool.slice(-3);
   const avg=k=>l3.length?sum(l3.map(q=>q.o[k][q.i]))/l3.length:null;
-  sv.m3={ent:avg("ent"),risp:avg("risp"),spese:avg("spese"),tasse:avg("tasse"),fisse:avg("fisse"),inv:avg("inv"),acc:avg("acc"),rn:avg("rn"),spT:avg("spT")};
-  {const q=pool[pool.length-1];sv.last=q?{lbl:MESI[q.i].toLowerCase()+(q.Y!==PY?" "+q.Y:""),ent:q.o.ent[q.i],acc:q.o.acc[q.i],rn:q.o.rn[q.i],spT:q.o.spT[q.i]}:null;}
+  sv.m3={ent:avg("ent"),risp:avg("risp"),spese:avg("spese"),tasse:avg("tasse"),fisse:avg("fisse"),inv:avg("inv"),acc:avg("acc"),rn:avg("rn"),spT:avg("spT"),aff:avg("aff")};
+  {const q=pool[pool.length-1];sv.last=q?{lbl:MESI[q.i].toLowerCase()+(q.Y!==PY?" "+q.Y:""),ent:q.o.ent[q.i],acc:q.o.acc[q.i],rn:q.o.rn[q.i],spT:q.o.spT[q.i],aff:q.o.aff[q.i]}:null;}
   /* media mensile sull'anno (mesi compilati di PY) */
-  {const aY=k=>okM.length?sum(okM.map(i=>sv[k][i]))/okM.length:null;sv.ya={ent:aY("ent"),acc:aY("acc"),rn:aY("rn"),spT:aY("spT")};
+  {const aY=k=>okM.length?sum(okM.map(i=>sv[k][i]))/okM.length:null;sv.ya={ent:aY("ent"),acc:aY("acc"),rn:aY("rn"),spT:aY("spT"),aff:aY("aff")};
    sv.yaLbl=okM.length?(okM.length>1?`${MESI[okM[0]].slice(0,3).toLowerCase()}–${MESI[okM[okM.length-1]].slice(0,3).toLowerCase()} `:`${MESI[okM[0]].slice(0,3).toLowerCase()} `)+PY:"";}
   sv.m3.tasso=sv.m3.ent>0?sv.m3.risp/sv.m3.ent:null;
-  sv.ytd={sp:sum(okM.map(i=>sv.ent[i]-sv.risp[i])),inv:sum(okM.map(i=>sv.inv[i])),sur:sum(okM.map(i=>sv.risp[i]-sv.inv[i])),acc:sum(okM.map(i=>sv.acc[i])),rn:sum(okM.map(i=>sv.rn[i])),ent:sum(okM.map(i=>sv.ent[i])),risp:sum(okM.map(i=>sv.risp[i])),spese:sum(okM.map(i=>sv.spese[i])),tasse:sum(okM.map(i=>sv.tasse[i])),fisse:sum(okM.map(i=>sv.fisse[i]))};sv.ytd.tasso=sv.ytd.ent>0?sv.ytd.risp/sv.ytd.ent:null;
+  sv.ytd={sp:sum(okM.map(i=>sv.ent[i]-sv.risp[i])),inv:sum(okM.map(i=>sv.inv[i])),sur:sum(okM.map(i=>sv.risp[i]-sv.inv[i])),acc:sum(okM.map(i=>sv.acc[i])),rn:sum(okM.map(i=>sv.rn[i])),ent:sum(okM.map(i=>sv.ent[i])),risp:sum(okM.map(i=>sv.risp[i])),spese:sum(okM.map(i=>sv.spese[i])),tasse:sum(okM.map(i=>sv.tasse[i])),fisse:sum(okM.map(i=>sv.fisse[i])),aff:sum(okM.map(i=>sv.aff[i]))};sv.ytd.tasso=sv.ytd.ent>0?sv.ytd.risp/sv.ytd.ent:null;
   {const ym=q=>`${q.Y}-${pad(q.i)}`,q=pool[pool.length-1];if(sv.last&&q)sv.last.ym=ym(q);}
   R.svAll={};R.ytdAll={};Object.keys(R.patr).filter(isY).forEach(Y=>{let x=null;try{x=+Y===PY?sv:svOf(+Y);}catch(_){x=null;}if(!x)return;R.svAll[Y]=x;
    const ok=x.risp.map((v,i)=>v!=null?i:-1).filter(i=>i>=0),S_=k=>sum(ok.map(i=>x[k][i]));
-   R.ytdAll[Y]={n:ok.length,lbl:ok.length?`${MESI[ok[0]].slice(0,3).toLowerCase()}–${MESI[ok[ok.length-1]].slice(0,3).toLowerCase()} ${Y}`:"",ent:S_("ent"),sp:sum(ok.map(i=>x.ent[i]-x.risp[i])),inv:S_("inv"),sur:sum(ok.map(i=>x.risp[i]-x.inv[i])),tasse:S_("tasse"),fisse:S_("fisse"),risp:S_("risp")};});
+   R.ytdAll[Y]={n:ok.length,lbl:ok.length?`${MESI[ok[0]].slice(0,3).toLowerCase()}–${MESI[ok[ok.length-1]].slice(0,3).toLowerCase()} ${Y}`:"",ent:S_("ent"),sp:sum(ok.map(i=>x.ent[i]-x.risp[i])),inv:S_("inv"),sur:sum(ok.map(i=>x.risp[i]-x.inv[i])),tasse:S_("tasse"),fisse:S_("fisse"),risp:S_("risp"),aff:S_("aff")};});
   sv.mesi=l3.map(q=>MESI[q.i].slice(0,3).toLowerCase()+(q.Y!==PY?" "+String(q.Y).slice(2):"")).join("–");R.sv=sv;
   /* previsione di cassa: 12 mesi dopo l'ultimo mese compilato */
   {const entA=s.prev.entrate!=null?s.prev.entrate:sv.m3.ent,speA=s.prev.spese!=null?s.prev.spese:sv.m3.spese,invA=s.prev.inv!=null?s.prev.inv:sv.m3.inv;
@@ -422,6 +425,10 @@ const donut=(segs0,sz,sw,label,center,cval,clab="totale",fv=null)=>{const F=fv||
   const arcs=segs.map(([l,v,c])=>{const len=v/tot*C,gap=segs.length>1?1.5:0,o=`<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${col(c)}" stroke-width="${sw}" stroke-dasharray="${Math.max(len-gap,0).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${sz/2} ${sz/2})"><title>${l}: ${F(v)} (${pc(v,tot)})</title></circle>`;off+=len;return o;}).join("");
   return `<svg viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" role="img" aria-label="${label}" class="dn">${segs0.some(x=>x[2]==="negh")?`<defs><pattern id="hatch-neg" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--neg-soft)"/><rect width="3" height="6" fill="var(--neg)"/></pattern></defs>`:""}${center===true?`<defs><pattern id="hatch-pc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--c-liq)"/><rect width="3.2" height="6" fill="var(--c-tasse)"/></pattern></defs>`:""}<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>${arcs}${center?`<text x="50%" y="${sz/2-2}" text-anchor="middle" class="pc1" style="font-size:${sz>140?17:13}px">${(cval!=null?cval:tot)?(fv?fv(cval!=null?cval:tot):fmt(Math.round(cval!=null?cval:tot)).replace(/,\d\d(?=\s|$)/,"")):"—"}</text><text x="50%" y="${sz/2+(sz>140?15:13)}" text-anchor="middle" class="pc2" style="font-size:${sz>140?11:10}px">${clab}</text>`:""}</svg>`;};
 const li=(c,l,v,t,fv)=>{const k=c==="taxh"?"tasse":c.replace(/^c-/,""),hx=c[0]==="#";return `<li><i style="${c==="taxh"?"background:repeating-linear-gradient(45deg,var(--c-tasse) 0 2.5px,var(--c-liq) 2.5px 5px)":hx?`background:${c}`:`background:var(--${c})`}"></i><span>${l}</span><b style="${hx?"color:var(--fg)":`color:var(--t-${k},var(--c-${k},var(--fg)))`}">${(fv||fmt)(v)}</b><em>${pc(v,t)}</em></li>`;};
+/* uso delle entrate: risparmio netto, tasse da accantonare, spese; l'affitto è separato dalle altre spese */
+const spSeg=x=>{const a=Math.max(n(x.aff),0);return [["Risparmio netto",x.rn,"c-risp"],["Da accantonare per tasse",x.acc,"c-tasse"],...(a>0?[["Affitto",a,"c-aff"],["Altre spese (vita + fisse)",n(x.spT)-a,"c-spese"]]:[["Spese (vita + fisse)",x.spT,"c-spese"]])];};
+/* entrate e uscite dell'anno: speso (affitto a parte), investito, surplus */
+const euSeg=x=>{const a=Math.max(n(x.aff),0);return [...(a>0?[["Affitto",a,"c-aff"],["Altro speso",n(x.sp)-a,"c-spese"]]:[["Speso",x.sp,"c-spese"]]),["Investito",x.inv,"c-inv"],["Surplus di liquidità",x.sur,"c-liq"]];};
 function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  if(!(L>=0))return `<div class="box pcard"><h3>Composizione del patrimonio</h3><p class="muted">Nessun mese compilato nel ${Y}.</p></div>`;
  const g=k=>+(getP(S,`patrimonio.${Y}.${L}.${k}`)||0),lq=g("fineco")+g("revolut"),iv=g("fondo")+g("etf");
@@ -430,9 +437,9 @@ function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  const liq=[["Fineco",g("fineco"),"c-fin"],["Revolut",g("revolut"),"c-rev"]],inv=[["Fondo Fineco",g("fondo"),"c-fondo"],["ETF Revolut",g("etf"),"c-etf"]];
  const rend=(v,p)=>`${out(v,"sign")} <small class="muted">${out(p,"pctS")}</small>`;
  const o=`patr.${Y}`;
- const rsp=(x,ttl,sub,mm)=>{if(!x||x.ent==null)return "";const ent=x.ent,sg=[["Risparmio netto",x.rn,"c-risp"],["Da accantonare per tasse",x.acc,"c-tasse"],["Spese (vita + fisse)",x.spT,"c-spese"]];
+ const rsp=(x,ttl,sub,mm)=>{if(!x||x.ent==null)return "";const ent=x.ent,sg=spSeg(x);
   return mm?`<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${mm}" title="Apri il resoconto mensile"><h4>${ttl} <small>${sub}</small></h4>`+rspIn(x,ttl):`<a class="psub" href="#risparmio" data-act="go" data-tab="risparmio" title="Apri Andamento: patrimonio e risparmio mese per mese"><h4>${ttl} <small>${sub}</small></h4>`+rspIn(x,ttl);};
- const rspIn=(x,ttl)=>{const ent=x.ent,sg=[["Risparmio netto",x.rn,"c-risp"],["Da accantonare per tasse",x.acc,"c-tasse"],["Spese (vita + fisse)",x.spT,"c-spese"]];return `
+ const rspIn=(x,ttl)=>{const ent=x.ent,sg=spSeg(x);return `
     <div class="psub-in">${donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),112,15,ttl,1,ent,"entrate")}<div><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("")}</ul></div></div></a>`;};
  return `<div class="box pcard"><h3>Composizione del patrimonio <small>a fine ${MESI[L].toLowerCase()} ${Y}</small></h3>
  <div class="pcard-in">
@@ -457,10 +464,10 @@ function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
     <dl class="kv">${kv("Già pagate",`<span class="nt-risp">${fmt(pg)}</span>`)}${kv("Da pagare",`<span class="nt-spese">${fmt(dp)}</span>`)}</dl></div></div></a>`;})()}
    ${rsp(R.sv&&R.sv.ya,"Uso delle entrate · media mensile",R.sv&&R.sv.yaLbl||"")}
    ${rsp(R.sv&&R.sv.last,"Uso delle entrate · ultimo mese",R.sv&&R.sv.last?R.sv.last.lbl:"",R.sv&&R.sv.last&&R.sv.last.ym)}
-   ${(()=>{const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const sg=[["Speso",x.sp,"c-spese"],["Investito",x.inv,"c-inv"],["Surplus di liquidità",x.sur,"c-liq"]];
+   ${(()=>{const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const sg=euSeg(x);
     return `<a class="psub" href="#entrate" data-act="go" data-tab="entrate" data-uy="${Y}" title="Apri Entrate e uscite ${Y}"><h4>Entrate e uscite ${Y} <small>${R.sv.yaLbl||""}</small></h4>
     <div class="psub-in">${donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),112,15,"Entrate e uscite "+Y,1,x.ent,"entrate")}<div><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,x.ent)).join("")}</ul>
-    <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${out("sv.ytd.tasse")}</span>`)}${kv("di cui spese fisse",`<span class="nt-spese">${out("sv.ytd.fisse")}</span>`)}</dl></div></div></a>`;})()}
+    <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${out("sv.ytd.tasse")}</span>`)}${kv("di cui spese fisse",`<span class="nt-spese">${out("sv.ytd.fisse")}</span>`)}${x.aff>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(x.aff)}</span>`):""}</dl></div></div></a>`;})()}
   </div></div></div>`;}
 function patPie(Y,vw=PT,dash=false){
  const open=dash?`<a class="box ppie box-link" href="#patrimonio" data-act="go" data-tab="patrimonio" data-pt="${vw}" title="Apri Patrimonio">`:`<div class="box ppie" id="ppie">`,close=dash?"</a>":"</div>";const P=R.patr[Y]||{},L=P.last,B=i=>`patrimonio.${Y}.${i}`,g=k=>+(getP(S,B(L)+"."+k)||0);
@@ -537,7 +544,7 @@ V.risparmio=()=>{const PY=R.PY;return `<section class="sheet">
    <div class="legend"><span><i style="background:var(--liq)"></i>Liquidità</span><span><i style="background:var(--inv)"></i>Investimenti</span><span><i style="background:var(--good);height:3px"></i>Patrimonio netto (dopo le tasse)</span></div></div>
   <div class="box" id="es-box"><h3>Entrate e spese mese per mese · ${PY}</h3>
    <div id="eschart"></div>
-   <div class="legend"><span><i style="background:var(--c-ent)"></i>entrate</span><span><i style="background:var(--c-spese)"></i>spese di vita</span><span><i style="background:var(--c-fisse)"></i>spese fisse</span><span><i style="background:var(--c-tasse)"></i>tasse pagate</span></div>
+   <div class="legend"><span><i style="background:var(--c-ent)"></i>entrate</span><span><i style="background:var(--c-spese)"></i>spese di vita</span>${R.sv&&R.sv.ytd&&R.sv.ytd.aff>0?`<span><i style="background:var(--c-aff)"></i>affitto</span>`:""}<span><i style="background:var(--c-fisse)"></i>${R.sv&&R.sv.ytd&&R.sv.ytd.aff>0?"altre spese fisse":"spese fisse"}</span><span><i style="background:var(--c-tasse)"></i>tasse pagate</span></div>
    <p class="note">Per ogni mese: a sinistra le entrate registrate, a destra le uscite (spese di vita + spese fisse + tasse pagate). La differenza è il risparmio del mese, mostrato nel grafico sotto. Tocca una barra per i valori. Compaiono solo i mesi con i saldi di inizio e fine mese in Patrimonio.</p></div>
   <div class="box c-good" id="sv-box"><h3>Risparmio mese per mese · ${PY}</h3>
    <div id="svchart"></div>
@@ -554,7 +561,7 @@ V.mese=()=>{const L=monthsAvail();
  if(!L.length)return `<section class="sheet"><div class="sheet-h"><h2>Resoconto mensile</h2></div><div class="banner">Il resoconto compare quando ci sono almeno due mesi consecutivi di saldi in <a href="#patrimonio">Patrimonio</a> e le entrate del mese in <a href="#entrate">Entrate</a>.</div></section>`;
  if(!MM||!L.includes(MM))MM=L[L.length-1];
  const k=L.indexOf(MM),Y=MM.slice(0,4),m=+MM.slice(5)-1,x=R.svAll[Y],g=q=>x[q][m],ent=g("ent");
- const sg=[["Risparmio netto",g("rn"),"c-risp"],["Da accantonare per tasse",g("acc"),"c-tasse"],["Spese (vita + fisse)",g("spT"),"c-spese"]];
+ const sg=spSeg({rn:g("rn"),acc:g("acc"),spT:g("spT"),aff:g("aff")}),affM=Math.max(n(g("aff")),0);
  const yrs=[...new Set(L.map(v=>v.slice(0,4)))];
  const isNeg=v=>{const z=R.svAll[v.slice(0,4)],i=+v.slice(5)-1;return z&&z.rn[i]!=null&&z.rn[i]<0;};
  const opts=yrs.map(y=>`<optgroup label="${y}">${L.filter(v=>v.startsWith(y)).map(v=>`<option value="${v}" ${v===MM?"selected":""}>${MESI[+v.slice(5)-1]} ${y}${isNeg(v)?" · in rosso":""}</option>`).join("")}</optgroup>`).join("");
@@ -567,23 +574,23 @@ V.mese=()=>{const L=monthsAvail();
  const barMax=Math.max(ent,usc,1),bw=v=>Math.max(0,Math.min(100,v/barMax*100)).toFixed(1);
  const negBox=neg?`<div class="neg-cmp" role="img" aria-label="Entrate ${fmt(ent)}, uscite ${fmt(usc)}">
    <div class="nc-r"><span>Entrate</span><div class="nc-t"><i class="nc-ent" style="width:${bw(ent)}%"></i></div><b class="nt-ent">${fmt(ent)}</b></div>
-   <div class="nc-r"><span>Uscite</span><div class="nc-t"><i class="nc-sp" style="width:${bw(Math.max(g("spT")||0,0))}%"></i><i class="nc-tx" style="width:${bw(Math.max(g("acc")||0,0))}%"></i></div><b class="neg">${fmt(usc)}</b></div>
+   <div class="nc-r"><span>Uscite</span><div class="nc-t">${affM>0?`<i class="nc-aff" style="width:${bw(affM)}%"></i>`:""}<i class="nc-sp" style="width:${bw(Math.max((g("spT")||0)-affM,0))}%"></i><i class="nc-tx" style="width:${bw(Math.max(g("acc")||0,0))}%"></i></div><b class="neg">${fmt(usc)}</b></div>
    <div class="nc-r nc-gap"><span></span><div class="nc-t"><i style="width:${bw(Math.min(ent,usc))}%;visibility:hidden"></i><i class="nc-def" style="width:${bw(def)}%"></i></div><b class="neg">${fmt(-def,"sign")}</b></div>
-   <p class="nc-l"><span><i class="nc-sp"></i>spese (vita + fisse)</span><span><i class="nc-tx"></i>da accantonare per tasse</span><span><i class="nc-def"></i>non coperto dalle entrate</span></p></div>`:"";
+   <p class="nc-l">${affM>0?`<span><i class="nc-aff"></i>affitto</span>`:""}<span><i class="nc-sp"></i>${affM>0?"altre spese":"spese (vita + fisse)"}</span><span><i class="nc-tx"></i>da accantonare per tasse</span><span><i class="nc-def"></i>non coperto dalle entrate</span></p></div>`:"";
  const ya=R.ytdAll[Y],avg=ya&&ya.n?ya.ent/ya.n:null;
  return `<section class="sheet">
  <div class="sheet-h"><h2>Resoconto mensile</h2><p>Come hai usato le entrate di ogni mese: quanto è rimasto davvero, quanto mettere da parte per le tasse e quanto hai speso.</p></div>
  <div class="mnav" role="group" aria-label="Scegli il mese">${nav(-1,"Mese precedente","‹")}<select class="in sel mm-sel" id="mm-sel" aria-label="Mese">${opts}</select>${nav(1,"Mese successivo","›")}</div>
  ${neg?`<div class="banner neg-b"><b>Mese in rosso</b>: le uscite (${fmt(usc)}) hanno superato le entrate (${fmt(ent)}) di <b>${fmt(def)}</b>, presi dai risparmi.${g("risp")<0?` La liquidità è scesa di ${fmt(-g("risp"))}.`:` La liquidità non è scesa (${fmt(g("risp"),"sign")}) solo perché le tasse da accantonare non sono ancora state pagate.`}</div>`:""}
  <div class="box${neg?" neg-box":""}"><h3>${neg?"Entrate e uscite":"Uso delle entrate"} <small>${MESI[m].toLowerCase()} ${Y}</small></h3>
-  <div class="ppie-in">${dn}<div class="pside">${neg?negBox+`<ul class="pleg">${li("c-spese","Spese (vita + fisse)",g("spT")||0,usc)}${li("c-tasse","Da accantonare per tasse",g("acc")||0,usc)}</ul>`:`<ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("")}</ul>`}</div></div></div>
+  <div class="ppie-in">${dn}<div class="pside">${neg?negBox+`<ul class="pleg">${affM>0?li("c-aff","Affitto",affM,usc)+li("c-spese","Altre spese (vita + fisse)",(g("spT")||0)-affM,usc):li("c-spese","Spese (vita + fisse)",g("spT")||0,usc)}${li("c-tasse","Da accantonare per tasse",g("acc")||0,usc)}</ul>`:`<ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("")}</ul>`}</div></div></div>
  <div class="box"><h3>Dettaglio del mese</h3><dl class="kv">
   ${kv("Entrate registrate",`<span class="nt-ent">${fmt(ent)}</span>`)}
   ${kv("Risparmio <small>variazione della liquidità + versamenti negli investimenti</small>",`<span class="${g("risp")<0?"neg":"pos"}">${fmt(g("risp"),"sign")}</span>`)}
   ${kv("di cui investito <small>versamenti ETF e movimenti del fondo</small>",`<span class="nt-inv">${fmt(g("inv"))}</span>`)}
   ${kv("Tasso di risparmio",fmt(g("tasso"),"pct1"))}
   ${kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)}
-  ${kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)}
+  ${kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)}${affM>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(affM)}</span>`):""}
   ${kv("Altre spese (di vita)",`<span class="nt-spese">${fmt(g("spese"))}</span>`)}
   ${kv("Da accantonare per tasse <small>competenza del mese</small>",`<span class="nt-tasse">${fmt(g("acc"))}</span>`)}
   ${kv("Risparmio netto",`<span class="${g("rn")<0?"neg":"pos"}">${fmt(g("rn"),"sign")}</span>`,"strong")}
@@ -593,11 +600,11 @@ V.mese=()=>{const L=monthsAvail();
 /* entrate e uscite dell'anno: grafico come in Dashboard, per l'anno scelto */
 const euBox=Y=>{const x=R.ytdAll&&R.ytdAll[Y];
  if(!x||!x.n)return `<div class="box" id="eu-box"><h3>Entrate e uscite ${Y}</h3><p class="muted">Per calcolare le uscite del ${Y} servono i saldi mensili in Patrimonio (almeno due mesi consecutivi).</p></div>`;
- const sg=[["Speso",x.sp,"c-spese"],["Investito",x.inv,"c-inv"],["Surplus di liquidità",x.sur,"c-liq"]];
+ const sg=euSeg(x);
  const dn=donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),170,26,"Entrate e uscite "+Y,1,x.ent,"entrate").replace('class="pc1" style="','class="pc1" style="fill:var(--t-ent);');
  return `<div class="box" id="eu-box"><h3>Entrate e uscite ${Y} <small>${x.lbl} · ${x.n} ${x.n===1?"mese":"mesi"} con saldi</small></h3>
   <div class="ppie-in">${dn}<div class="pside"><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,x.ent)).join("")}</ul>
-  <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${fmt(x.tasse)}</span>`)}${kv("di cui spese fisse",`<span class="nt-spese">${fmt(x.fisse)}</span>`)}</dl></div></div>
+  <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${fmt(x.tasse)}</span>`)}${kv("di cui spese fisse",`<span class="nt-spese">${fmt(x.fisse)}</span>`)}${x.aff>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(x.aff)}</span>`):""}</dl></div></div>
   <p class="note">Solo i mesi con i saldi di inizio e fine mese: per questo le entrate qui possono differire dal totale della tabella sotto.</p></div>`;};
 V.entrate=()=>{
  const Y=UY,T=R.anni[Y],c=`anni.${Y}`;
@@ -779,9 +786,10 @@ function esChart(){
  const y=v=>T+ph-v/top*ph;
  let g="";for(let v=0;v<=top;v+=st)g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" ${v?'stroke-dasharray="3 4"':''}/><text x="${L-5}" y="${y(v)+4}" text-anchor="end">${fN.format(v/1000)}k</text>`;
  let bs="";MESI.forEach((m,i)=>{const cx=L+slot*i+slot/2;g+=`<text x="${cx}" y="${H-6}" text-anchor="middle">${m.slice(0,1)}</text>`;if(sv.ent[i]==null)return;
-  const tip=`${m}: entrate ${fmt(sv.ent[i])} · uscite ${fmt(out_(i))} (vita ${fmt(sv.spese[i])}, fisse ${fmt(sv.fisse[i])}, tasse ${fmt(sv.tasse[i])}) · risparmio ${fmt(sv.risp[i],"sign")}`;
+  const tip=`${m}: entrate ${fmt(sv.ent[i])} · uscite ${fmt(out_(i))} (vita ${fmt(sv.spese[i])}, fisse ${fmt(sv.fisse[i])}${n(sv.aff[i])>0?` di cui affitto ${fmt(sv.aff[i])}`:""}, tasse ${fmt(sv.tasse[i])}) · risparmio ${fmt(sv.risp[i],"sign")}`;
   const e=n(sv.ent[i]);bs+=`<rect x="${cx-bw-1}" y="${y(e)}" width="${bw}" height="${Math.max(1,y(0)-y(e))}" rx="2" style="fill:var(--c-ent)" data-tip="${esc(tip)}"><title>${esc(tip)}</title></rect>`;
-  let acc=0;[["spese","--c-spese"],["fisse","--c-fisse"],["tasse","--c-tasse"]].forEach(([k,c])=>{const v=P(k)(i);if(!v)return;bs+=`<rect x="${cx+1}" y="${y(acc+v)}" width="${bw}" height="${Math.max(1,y(acc)-y(acc+v))}" style="fill:var(${c})" data-tip="${esc(tip)}"><title>${esc(tip)}</title></rect>`;acc+=v;});});
+  const PV={spese:P("spese")(i),aff:P("aff")(i),fisse:Math.max(P("fisse")(i)-P("aff")(i),0),tasse:P("tasse")(i)};
+  let acc=0;[["spese","--c-spese"],["aff","--c-aff"],["fisse","--c-fisse"],["tasse","--c-tasse"]].forEach(([k,c])=>{const v=PV[k];if(!v)return;bs+=`<rect x="${cx+1}" y="${y(acc+v)}" width="${bw}" height="${Math.max(1,y(acc)-y(acc+v))}" style="fill:var(${c})" data-tip="${esc(tip)}"><title>${esc(tip)}</title></rect>`;acc+=v;});});
  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Entrate e spese mese per mese">${g}${bs}</svg><p id="es-tip" aria-live="polite"></p>`;
  el.querySelector("svg").addEventListener("click",ev=>{const r=ev.target.closest("rect[data-tip]");const t=document.getElementById("es-tip");if(t)t.textContent=r?r.dataset.tip:"";});}
 /* tabella del risparmio mese per mese: vista Sintesi / Dettaglio, righe cliccabili verso il Resoconto mensile */
@@ -799,17 +807,18 @@ function svTable(){const sv=R.sv,PY=R.PY;if(!sv)return "";
  const c=(v,cl)=>Math.abs(n(v))<0.005?`<span class="muted">—</span>`:`<span class="${cl}">${f0(v)}</span>`;
  const bar=t=>{const p=t==null?0:Math.min(1,Math.abs(t));return `<span class="tbar"><i style="width:${(p*100).toFixed(0)}%;background:var(${t<0?"--c-spese":"--c-risp"})"></i></span>`;};
  const best=ok.reduce((a,i)=>sv.rn[i]>sv.rn[a]?i:a,ok[0]);
- const cols=det?[["Entrate"],["Spese di vita"],["Spese fisse"],["Tasse pagate"],["Risparmio"],["Tasso"],["Da accantonare"],["Risparmio netto"]]:[["Entrate €"],["Uscite €"],["Risparmio €"],["Tasso"]];
- const cells=i=>det?[c(sv.ent[i],"nt-ent"),c(sv.spese[i],"nt-spese"),c(sv.fisse[i],"nt-spese"),c(sv.tasse[i],"nt-tasse"),sgn(sv.risp[i]),fmt(sv.tasso[i],"pct1")+bar(sv.tasso[i]),c(sv.acc[i],"nt-tasse"),sgn(sv.rn[i])]
+ const hasA=n(sv.ytd&&sv.ytd.aff)>0;
+ const cols=det?[["Entrate"],["Spese di vita"],...(hasA?[["Affitto"],["Altre fisse"]]:[["Spese fisse"]]),["Tasse pagate"],["Risparmio"],["Tasso"],["Da accantonare"],["Risparmio netto"]]:[["Entrate €"],["Uscite €"],["Risparmio €"],["Tasso"]];
+ const cells=i=>det?[c(sv.ent[i],"nt-ent"),c(sv.spese[i],"nt-spese"),...(hasA?[c(sv.aff[i],"nt-aff"),c(n(sv.fisse[i])-n(sv.aff[i]),"nt-spese")]:[c(sv.fisse[i],"nt-spese")]),c(sv.tasse[i],"nt-tasse"),sgn(sv.risp[i]),fmt(sv.tasso[i],"pct1")+bar(sv.tasso[i]),c(sv.acc[i],"nt-tasse"),sgn(sv.rn[i])]
   :[c(sv.ent[i],"nt-ent"),c(usc(i),"nt-spese"),sgn(sv.risp[i]),fmt(sv.tasso[i],"pct1")+bar(sv.tasso[i])];
- const head=det?`<tr class="grp"><th rowspan="2">Mese</th><th rowspan="2">Entrate</th><th colspan="3">Uscite</th><th colspan="4">Risparmio</th><th rowspan="2" class="go" aria-label="Apri"></th></tr><tr class="grp2">${cols.slice(1).map(x=>`<th>${x[0]}</th>`).join("")}</tr>`
+ const head=det?`<tr class="grp"><th rowspan="2">Mese</th><th rowspan="2">Entrate</th><th colspan="${hasA?4:3}">Uscite</th><th colspan="4">Risparmio</th><th rowspan="2" class="go" aria-label="Apri"></th></tr><tr class="grp2">${cols.slice(1).map(x=>`<th>${x[0]}</th>`).join("")}</tr>`
   :`<tr><th>Mese</th>${cols.map(x=>`<th>${x[0]}</th>`).join("")}<th class="go" aria-label="Apri"></th></tr>`;
  let rows="";for(let i=0;i<=Math.min(lastM,11);i++){
   if(sv.risp[i]==null){rows+=`<tr class="nod"><td>${mLbl(i)}</td><td colspan="${cols.length+1}" class="nodt">${`${PY}-${pad(i)}`===TODAY.slice(0,7)?"mese in corso: si completa con il saldo di fine mese":"saldi mancanti in Patrimonio"}</td></tr>`;continue;}
   rows+=`<tr class="lk${i===best?" best":""}" data-act="go" data-tab="mese" data-mm="${PY}-${pad(i)}" tabindex="0" title="Apri il resoconto di ${MESI[i].toLowerCase()} ${PY}"><td>${mLbl(i)}${i===best?' <small class="bst">migliore</small>':""}</td>${cells(i).map(x=>`<td>${x}</td>`).join("")}<td class="go">›</td></tr>`;}
  const Y=sv.ytd,k=ok.length,av=v=>v/k;
- const tot=det?[c(Y.ent,"nt-ent"),c(Y.spese,"nt-spese"),c(Y.fisse,"nt-spese"),c(Y.tasse,"nt-tasse"),sgn(Y.risp),fmt(Y.tasso,"pct1"),c(Y.acc,"nt-tasse"),sgn(Y.rn)]:[c(Y.ent,"nt-ent"),c(Y.ent-Y.risp,"nt-spese"),sgn(Y.risp),fmt(Y.tasso,"pct1")];
- const med=det?[c(av(Y.ent),"nt-ent"),c(av(Y.spese),"nt-spese"),c(av(Y.fisse),"nt-spese"),c(av(Y.tasse),"nt-tasse"),sgn(av(Y.risp)),"",c(av(Y.acc),"nt-tasse"),sgn(av(Y.rn))]:[c(av(Y.ent),"nt-ent"),c(av(Y.ent-Y.risp),"nt-spese"),sgn(av(Y.risp)),""];
+ const tot=det?[c(Y.ent,"nt-ent"),c(Y.spese,"nt-spese"),...(hasA?[c(Y.aff,"nt-aff"),c(Y.fisse-Y.aff,"nt-spese")]:[c(Y.fisse,"nt-spese")]),c(Y.tasse,"nt-tasse"),sgn(Y.risp),fmt(Y.tasso,"pct1"),c(Y.acc,"nt-tasse"),sgn(Y.rn)]:[c(Y.ent,"nt-ent"),c(Y.ent-Y.risp,"nt-spese"),sgn(Y.risp),fmt(Y.tasso,"pct1")];
+ const med=det?[c(av(Y.ent),"nt-ent"),c(av(Y.spese),"nt-spese"),...(hasA?[c(av(Y.aff),"nt-aff"),c(av(Y.fisse-Y.aff),"nt-spese")]:[c(av(Y.fisse),"nt-spese")]),c(av(Y.tasse),"nt-tasse"),sgn(av(Y.risp)),"",c(av(Y.acc),"nt-tasse"),sgn(av(Y.rn))]:[c(av(Y.ent),"nt-ent"),c(av(Y.ent-Y.risp),"nt-spese"),sgn(av(Y.risp)),""];
  return `<details class="more svt" id="svt-det" ${SVT_OPEN?"open":""}><summary>Tabella mese per mese</summary>
   <div class="svt-bar"><div class="seg sm" role="tablist" aria-label="Colonne">${[["sint","Sintesi"],["det","Dettaglio"]].map(([v,l])=>`<button class="segb" data-act="svv" data-v="${v}" aria-selected="${v===SVV}">${l}</button>`).join("")}</div><span class="muted svt-h">${det?"Scorri di lato per tutte le colonne · ":""}Tocca un mese per il resoconto</span></div>
   <div class="tbl-wrap flat"><table class="sv2${det?" det":""}"><thead>${head}</thead><tbody>${rows}</tbody>
