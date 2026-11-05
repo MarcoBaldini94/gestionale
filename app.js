@@ -1358,8 +1358,26 @@ function cleanCart(c){if(!c||typeof c!=="object"||!ymOk(c.periodo))return null;
   ferie:{fs:fr(fe.festivitaSoppresse),co:fr(fe.congedoOrdinario),ap:fr(fe.residuoAnniPrecedenti),tot:num(o(fe.residueTotali).residuo)},
   tz:{notte:mp(tz.gettoneNotturnaMin),fest:mp(tz.gettoneFestivaMin),indFest:mp(tz.indennitaFestiva)},
   agg:minN(d.aggiuntivaMin)??0,aggGiorni:ints(d.aggiuntivaGiorni),recGiorni:gg.filter(g=>g.c.some(x=>x[0]==="9018")).map(g=>g.g),notti:ints(d.notti),festive:ints(d.festive),ferieGiorni:ints(d.ferieGiorni),causali:caus,ok:k.ok===true};}
+/* Cartellino già compattato (formato salvato in S.cart.lista). Prima sanitizeCart lo ripassava a cleanCart,
+   che legge il formato dell'Hub: a ogni avvio timbrature, ore, ferie e controllo venivano azzerati, poi cartSync
+   li riscaricava → due backup diversi (≈69 KB / ≈82 KB) a ogni apertura e sezione Lavoro vuota senza Hub. */
+function cleanCartStored(c){if(!c||typeof c!=="object"||!ymOk(c.periodo))return null;
+ const o=x=>x&&typeof x==="object"?x:{},ints=a=>(Array.isArray(a)?a:[]).filter(n=>Number.isInteger(n));
+ const mp=x=>({mese:num(o(x).mese)??0,progr:num(o(x).progr)??0}),fr=x=>({spettanti:num(o(x).spettanti)??0,fruiti:num(o(x).fruiti)??0,decurtati:num(o(x).decurtati)??0,residuo:num(o(x).residuo)??0});
+ const gg=(Array.isArray(c.giorni)?c.giorni:[]).filter(g=>g&&typeof g==="object").map(g=>({g:minN(g.g),dow:str(g.dow).slice(0,3),orario:str(g.orario).slice(0,6),
+  t:(Array.isArray(g.t)?g.t:[]).filter(Array.isArray).map(t=>[str(t[0]),str(t[1]),t[2]==="a"?"a":"o"]),
+  c:(Array.isArray(g.c)?g.c:[]).filter(Array.isArray).map(x=>[str(x[0]).slice(0,8),minN(x[1])]),
+  tc:minN(g.tc),ec:minN(g.ec)})).filter(g=>g.g);
+ const fe=o(c.ferie),tz=o(c.tz),caus={};Object.entries(o(c.causali)).forEach(([a,b])=>{caus[str(a).slice(0,8)]=str(b).slice(0,80);});
+ return{file:str(c.file).slice(0,120),periodo:c.periodo,provvisorio:c.provvisorio===true,calcolo:str(c.calcolo).slice(0,19),giorni:gg,
+  fatto:minN(c.fatto),dovuto:minN(c.dovuto),recupero:minN(c.recupero),
+  ferie:{fs:fr(fe.fs),co:fr(fe.co),ap:fr(fe.ap),tot:num(fe.tot)},
+  tz:{notte:mp(tz.notte),fest:mp(tz.fest),indFest:mp(tz.indFest)},
+  agg:minN(c.agg)??0,aggGiorni:ints(c.aggGiorni),recGiorni:ints(c.recGiorni),notti:ints(c.notti),festive:ints(c.festive),ferieGiorni:ints(c.ferieGiorni),causali:caus,ok:c.ok===true};}
+/* formato salvato se ha i campi compattati, altrimenti (dati vecchi / risposta Hub) quello dell'Hub */
+const cartItem=c=>c&&typeof c==="object"&&("tz" in c||"fatto" in c||"recupero" in c||"ok" in c)?cleanCartStored(c):cleanCart(c);
 function sanitizeCart(x){if(!x||typeof x!=="object")return null;
- return{agg:str(x.agg),lista:(Array.isArray(x.lista)?x.lista:[]).map(cleanCart).filter(Boolean),
+ return{agg:str(x.agg),lista:(Array.isArray(x.lista)?x.lista:[]).map(cartItem).filter(Boolean),
   errori:(Array.isArray(x.errori)?x.errori:[]).filter(e=>e&&typeof e==="object").map(e=>({file:str(e.file),errore:str(e.errore)}))};}
 function applyCart(arch){
  const prima=JSON.stringify(S.cart||null);

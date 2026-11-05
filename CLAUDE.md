@@ -59,6 +59,7 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - `S.cart = {agg, lista, errori}`: un cartellino per mese (ricalcolo più recente), compattato da `cleanCart` (giorni `{g,dow,orario,t:[[e,u,o|a]],c:[[codice,minuti]],tc,ec}`, ore in minuti, ferie, totalizzatori gettone notturna/festiva, aggiuntiva = Σ causale 000038, notti, festive, giorni di ferie). Nessun dato anagrafico.
 - `cartPagamenti()`: per ogni mese M, guardia (ore gettone notturne + festive) e aggiuntiva confrontate con le voci dei cedolini verificati con `riferimento = M` (20169 guardia, 28070 aggiuntiva; tariffa e quantità lette dal cedolino). Stato: pagato (scarto ≤ 15 min), meno/più ore, non trovato (se esiste già il cedolino di M+2), in arrivo.
 - Non modifica Entrate: è solo lettura + previsione.
+- `sanitizeCart` (al caricamento) usa `cleanCartStored` per il formato già compattato e `cleanCart` solo per il formato dell'Hub (`cartItem` sceglie). Fino alla v12 ripassava i dati salvati a `cleanCart` e li azzerava a ogni avvio → backup alternati ~69/82 KB (05/11/2026). `load()` deve restare idempotente: test = caricare un backup e verificare che risalvato sia identico.
 - Trigger: avvio, `visibilitychange`, `online`, ripristino, «Aggiorna ora». Stato in localStorage `bilancio-cart-stato`.
 
 ## Spese fisse (`S.ricorrenti`) e Finanze (05/11/2026)
