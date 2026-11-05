@@ -64,7 +64,7 @@ function sanitize(s){
   o.chiusure={};for(const [y,v] of Object.entries(s.chiusure||{}))if(isY(y)&&num(v)!=null)o.chiusure[y]=v;
   o.fondo={capitale:num(s.fondo&&s.fondo.capitale)};o.etfBase=num(s.etfBase);
   o.scadenzario=(Array.isArray(s.scadenzario)?s.scadenzario:d.scadenzario).filter(r=>r&&typeof r==="object").map(r=>({id:str(r.id)||uid(),
-    voce:str(r.voce),anno:num(r.anno),auto:AUTO_LBL[r.auto]?r.auto:"",tipo:["qa","qb","imp","spesa"].includes(r.tipo)?r.tipo:"",ric:str(r.ric),frazione:num(r.frazione)??1,meno:num(r.meno)??0,importo:num(r.importo),scadenza:str(r.scadenza),pagato:r.pagato===true,forzaNonPagato:r.forzaNonPagato===true,dataPag:str(r.dataPag)}));
+    voce:str(r.voce),anno:num(r.anno),auto:AUTO_LBL[r.auto]?r.auto:"",tipo:["qa","qb","imp","spesa"].includes(r.tipo)?r.tipo:"",ric:str(r.ric),...(/^\d{4}-\d{2}$/.test(r.rm)?{rm:r.rm}:{}),frazione:num(r.frazione)??1,meno:num(r.meno)??0,importo:num(r.importo),scadenza:str(r.scadenza),pagato:r.pagato===true,forzaNonPagato:r.forzaNonPagato===true,dataPag:str(r.dataPag)}));
   o.accantonato=num(s.accantonato);
   o.sondExt=s.sondExt&&/^\d{4}-\d{2}$/.test(s.sondExt.da)?{da:s.sondExt.da,a:/^\d{4}-\d{2}$/.test(s.sondExt.a)?s.sondExt.a:s.sondExt.da,fonte:str(s.sondExt.fonte),agg:str(s.sondExt.agg)}:null;
   o.ced=sanitizeCed(s.ced);
@@ -73,7 +73,8 @@ function sanitize(s){
   o.gen=(Array.isArray(s.gen)?s.gen:[]).filter(x=>typeof x==="string");
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
-    mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number")}));
+    mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
+    freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),da:/^\d{4}-\d{2}$/.test(t.da)?t.da:""}));
   return o;
 }
 function load(src){const s0=(!src||typeof src!=="object")?defaults():sanitize(src.v>=3?src:migrate(src));return freezePaid(ensureYears(ensureRic(s0)));}
@@ -91,11 +92,21 @@ function ensureYears(s){const cy=new Date().getFullYear();if(!Array.isArray(s.ge
   return s;}
 /* una voce pagata con importo calcolato viene "congelata": se poi cambi parametri o importi delle spese fisse, lo storico non si riscrive */
 function freezePaid(s){const Rc=calc(s);s.scadenzario.forEach((r,i)=>{if(r.importo==null&&paidOf(r)){const v=Rc.deb.rows[i].auto;if(typeof v==="number"&&isFinite(v))r.importo=Math.round(v*100)/100;}});return s;}
-/* spese fisse annuali: una voce nello Scadenzario per ogni modello, per l'anno in corso e i due successivi */
+/* spese fisse: una voce nello Scadenzario per ogni modello, per l'anno in corso e i due successivi */
+/* spese fisse mensili (freq "m"): una voce per mese dal mese «da» (o dal mese in corso) a dicembre dell'anno prossimo, il giorno scelto (fine mese se manca) */
+function ensureRicM(s,t){const now=new Date(),cy=now.getFullYear(),cur=`${cy}-${String(now.getMonth()+1).padStart(2,"0")}`;if(!t.da)t.da=cur;
+  let y=+t.da.slice(0,4),m=+t.da.slice(5);if(`${y}-${String(m).padStart(2,"0")}`<cur.slice(0,4)+"-01"){y=cy;m=1;}
+  for(;y<=cy+1;m++){if(m>12){m=1;y++;if(y>cy+1)break;}const mm=String(m).padStart(2,"0"),ym=`${y}-${mm}`;if(t.esclusi.includes(ym))continue;
+    const dd=String(Math.min(t.giorno,new Date(y,m,0).getDate())).padStart(2,"0"),sc=`${ym}-${dd}`;
+    let r=s.scadenzario.find(x=>x.ric===t.id&&x.anno===y&&(x.rm===ym));
+    if(!r){r={id:`${t.id}-${ym}`,voce:t.voce,anno:y,auto:"",tipo:"spesa",ric:t.id,rm:ym,frazione:1,meno:0,importo:null,scadenza:sc,pagato:false,forzaNonPagato:false,dataPag:""};s.scadenzario.push(r);}
+    else if(!r.pagato&&(ym>=cur||!(r.scadenza&&r.scadenza<=TODAY))){r.voce=t.voce;r.scadenza=sc;}}}
 function ensureRic(s){if(!s.ricorrenti)s.ricorrenti=[];const cy=new Date().getFullYear();
-  s.ricorrenti.forEach(t=>{for(let y=cy;y<=cy+2;y++){if(t.esclusi.includes(y))continue;
+  s.ricorrenti.forEach(t=>{if(t.freq==="m"){s.scadenzario=s.scadenzario.filter(r=>r.ric!==t.id||r.rm||paidOf(r));ensureRicM(s,t);return;}
+    s.scadenzario=s.scadenzario.filter(r=>r.ric!==t.id||!r.rm||paidOf(r));
+    for(let y=cy;y<=cy+2;y++){if(t.esclusi.includes(y))continue;
     const mm=String(t.mese).padStart(2,"0"),dd=new Date(y,t.mese,0).getDate(),sc=`${y}-${mm}-${dd}`;
-    let r=s.scadenzario.find(x=>x.ric===t.id&&x.anno===y);
+    let r=s.scadenzario.find(x=>x.ric===t.id&&x.anno===y&&!x.rm);
     if(!r){r={id:`${t.id}-${y}`,voce:t.voce,anno:y,auto:"",tipo:"spesa",ric:t.id,frazione:1,meno:0,importo:null,scadenza:sc,pagato:false,forzaNonPagato:false,dataPag:""};s.scadenzario.push(r);}
     else if(!r.pagato&&!(r.scadenza&&r.scadenza<=TODAY)){r.voce=t.voce;r.scadenza=sc;}}});
   const ids=new Set(s.ricorrenti.map(t=>t.id));s.scadenzario=s.scadenzario.filter(r=>!r.ric||ids.has(r.ric)||paidOf(r));
@@ -155,7 +166,7 @@ function calc(s){
   const isF=r=>tipoOf(r)!=="spesa";
   const curY=new Date().getFullYear(),fut=r=>r.anno!=null&&r.anno>curY;
   const D0={rows,curY,aperti:sum(s.scadenzario.map((r,i)=>!isF(r)||paidOf(r)||fut(r)?0:rows[i].imp)),futuri:sum(s.scadenzario.map((r,i)=>isF(r)&&!paidOf(r)&&fut(r)?rows[i].imp:0)),
-    pagati:sum(s.scadenzario.map((r,i)=>isF(r)&&paidOf(r)?rows[i].imp:0)),acc:s.accantonato,perAnno:{},fisseAnno:sum((s.ricorrenti||[]).map(t=>t.importo))};
+    pagati:sum(s.scadenzario.map((r,i)=>isF(r)&&paidOf(r)?rows[i].imp:0)),acc:s.accantonato,perAnno:{},fisseAnno:sum((s.ricorrenti||[]).map(t=>n(t.importo)*(t.freq==="m"?12:1)))};
   {const nx=s.scadenzario.map((r,i)=>({r,i})).filter(({r})=>!paidOf(r)&&r.scadenza&&SD(r)>=TODAY).sort((a,b)=>SD(a.r).localeCompare(SD(b.r)))[0];
    D0.next=nx?{voce:nx.r.voce,data:dIt(SD(nx.r)),imp:rows[nx.i].imp}:null;}
   D0.perAnnoF={};D0.perAnnoFT={};D0.perAnnoFP={};s.scadenzario.forEach((r,i)=>{if(!isF(r))return;const g=scadGroup(r);D0.perAnnoFT[g]=(D0.perAnnoFT[g]||0)+rows[i].imp;if(paidOf(r))D0.perAnnoFP[g]=(D0.perAnnoFP[g]||0)+rows[i].imp;else D0.perAnnoF[g]=(D0.perAnnoF[g]||0)+rows[i].imp;});
@@ -385,25 +396,27 @@ V.scadenzario=()=>{
  <details class="more"><summary>Altre opzioni e come funziona</summary>
   <div class="actions">${ys.map(y=>`<button class="btn ghost" data-act="gen-enpam" data-y="${y}" ${READONLY?"disabled":""}>+ Rate ENPAM ${y}</button><button class="btn ghost" data-act="gen-imp" data-y="${y}" ${READONLY?"disabled":""}>+ Imposta ${y}</button>`).join("")}</div>
   <p class="note">Il mese in corso è evidenziato; un ✓ accanto al totale indica che il mese è tutto pagato. Le voci ENPAM e imposta calcolate prendono l'importo dalla scheda Tasse finché non scrivi quello reale. Se un addebito non è andato a buon fine, clicca su "✓ Pagato" per riportarlo a "Da pagare". "Riferita a" serve a sapere di quale tassa e di quale anno è una voce inserita a mano: la usa la Composizione tasse della Dashboard. "Rate ENPAM" crea le 4 rate di Quota A (30/4, 30/6, 30/9, 30/11) e la Quota B dell'anno prima in 5 rate SDD (31/10, 31/12, 28/2, 30/4, 30/6; le ultime tre hanno un piccolo interesse legale, qui non incluso).</p></details>
-<div class="box c-tax"><h3>Spese fisse annuali</h3>
-  <div class="tbl-wrap flat"><table class="ric"><thead><tr><th>Voce</th><th>Mese</th><th>Importo</th><th>Varia ogni anno</th><th></th></tr></thead><tbody>
+<div class="box c-tax"><h3>Spese fisse</h3>
+  <div class="tbl-wrap flat"><table class="ric"><thead><tr><th>Voce</th><th>Ogni</th><th>Quando</th><th>Importo</th><th>Varia</th><th></th></tr></thead><tbody>
   ${S.ricorrenti.map((t,i)=>`<tr><td>${inpT(`ricorrenti.${i}.voce`,"text","es. Bollo auto")}</td>
-   <td><select class="in sel mesesel" id="${idOf("ricorrenti."+i+".mese")}" data-i="ricorrenti.${i}.mese" data-k="mese" aria-label="Mese">${MESI.map((m,k)=>`<option value="${k+1}">${m}</option>`).join("")}</select></td>
+   <td><select class="in sel ricfreq" id="${idOf("ricorrenti."+i+".freq")}" data-i="ricorrenti.${i}.freq" data-k="sel" aria-label="Frequenza"><option value="a">anno</option><option value="m">mese</option></select></td>
+   <td>${t.freq==="m"?`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".giorno")}" data-i="ricorrenti.${i}.giorno" data-k="mese" aria-label="Giorno del mese">${Array.from({length:31},(_,k)=>`<option value="${k+1}">il ${k+1}</option>`).join("")}</select>`
+     :`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".mese")}" data-i="ricorrenti.${i}.mese" data-k="mese" aria-label="Mese">${MESI.map((m,k)=>`<option value="${k+1}">${m}</option>`).join("")}</select>`}</td>
    <td class="imp">${inp(`ricorrenti.${i}.importo`)}</td><td class="c">${inpT(`ricorrenti.${i}.variabile`,"checkbox")}</td>
-   <td class="c"><button class="icon-btn" data-act="del-ric" data-idx="${i}" aria-label="Elimina spesa fissa" ${READONLY?"disabled":""}>×</button></td></tr>`).join("")||`<tr><td colspan="5" class="muted">Nessuna spesa fissa.</td></tr>`}
+   <td class="c"><button class="icon-btn" data-act="del-ric" data-idx="${i}" aria-label="Elimina spesa fissa" ${READONLY?"disabled":""}>×</button></td></tr>`).join("")||`<tr><td colspan="6" class="muted">Nessuna spesa fissa.</td></tr>`}
   </tbody></table></div>
   <div class="actions"><button class="btn" data-act="add-ric" ${READONLY?"disabled":""}>+ Aggiungi spesa fissa</button></div>
-  <p class="note">Ogni spesa fissa compare nello Scadenzario per quest'anno e i due successivi, all'ultimo giorno del mese, e risulta pagata da sola alla scadenza. Le spese con importo variabile (es. assicurazioni) si correggono anno per anno direttamente nella riga dello Scadenzario. Le spese fisse non sono debiti fiscali: non riducono il patrimonio netto, ma entrano nella previsione di cassa.</p>
+  <p class="note">Spese fisse annuali: compaiono nello Scadenzario per quest'anno e i due successivi, all'ultimo giorno del mese scelto. Spese fisse mensili (es. affitto): una voce al mese, il giorno scelto, dal mese in cui le aggiungi fino a dicembre dell'anno prossimo (si allunga da sola). Tutte risultano pagate da sole alla scadenza; per saltare un mese elimina quella riga nello Scadenzario. Le spese con importo variabile (es. assicurazioni) si correggono anno per anno direttamente nella riga dello Scadenzario. Le spese fisse non sono debiti fiscali: non riducono il patrimonio netto, ma entrano nella previsione di cassa.</p>
  </div>
 </section>`;
 };
 
 /* ciambelle e legende condivise (Dashboard, Resoconto mensile, Entrate) */
 const pc=(v,t)=>t?Math.round(v/t*100)+"%":"—";
-const col=c=>c==="taxh"?"url(#hatch-pc)":c[0]==="#"?c:`var(--${c})`;
+const col=c=>c==="taxh"?"url(#hatch-pc)":c==="negh"?"url(#hatch-neg)":c[0]==="#"?c:`var(--${c})`;
 const donut=(segs0,sz,sw,label,center,cval,clab="totale",fv=null)=>{const F=fv||fmt;const segs=segs0.filter(x=>x[1]>0),tot=sum(segs.map(x=>x[1])),r=(sz-sw)/2,C=2*Math.PI*r;let off=0;
   const arcs=segs.map(([l,v,c])=>{const len=v/tot*C,gap=segs.length>1?1.5:0,o=`<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="${col(c)}" stroke-width="${sw}" stroke-dasharray="${Math.max(len-gap,0).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${sz/2} ${sz/2})"><title>${l}: ${F(v)} (${pc(v,tot)})</title></circle>`;off+=len;return o;}).join("");
-  return `<svg viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" role="img" aria-label="${label}" class="dn">${center===true?`<defs><pattern id="hatch-pc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--c-liq)"/><rect width="3.2" height="6" fill="var(--c-tasse)"/></pattern></defs>`:""}<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>${arcs}${center?`<text x="50%" y="${sz/2-2}" text-anchor="middle" class="pc1" style="font-size:${sz>140?17:13}px">${(cval!=null?cval:tot)?(fv?fv(cval!=null?cval:tot):fmt(Math.round(cval!=null?cval:tot)).replace(/,\d\d(?=\s|$)/,"")):"—"}</text><text x="50%" y="${sz/2+(sz>140?15:13)}" text-anchor="middle" class="pc2" style="font-size:${sz>140?11:10}px">${clab}</text>`:""}</svg>`;};
+  return `<svg viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" role="img" aria-label="${label}" class="dn">${segs0.some(x=>x[2]==="negh")?`<defs><pattern id="hatch-neg" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--neg-soft)"/><rect width="3" height="6" fill="var(--neg)"/></pattern></defs>`:""}${center===true?`<defs><pattern id="hatch-pc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--c-liq)"/><rect width="3.2" height="6" fill="var(--c-tasse)"/></pattern></defs>`:""}<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>${arcs}${center?`<text x="50%" y="${sz/2-2}" text-anchor="middle" class="pc1" style="font-size:${sz>140?17:13}px">${(cval!=null?cval:tot)?(fv?fv(cval!=null?cval:tot):fmt(Math.round(cval!=null?cval:tot)).replace(/,\d\d(?=\s|$)/,"")):"—"}</text><text x="50%" y="${sz/2+(sz>140?15:13)}" text-anchor="middle" class="pc2" style="font-size:${sz>140?11:10}px">${clab}</text>`:""}</svg>`;};
 const li=(c,l,v,t,fv)=>{const k=c==="taxh"?"tasse":c.replace(/^c-/,""),hx=c[0]==="#";return `<li><i style="${c==="taxh"?"background:repeating-linear-gradient(45deg,var(--c-tasse) 0 2.5px,var(--c-liq) 2.5px 5px)":hx?`background:${c}`:`background:var(--${c})`}"></i><span>${l}</span><b style="${hx?"color:var(--fg)":`color:var(--t-${k},var(--c-${k},var(--fg)))`}">${(fv||fmt)(v)}</b><em>${pc(v,t)}</em></li>`;};
 function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  if(!(L>=0))return `<div class="box pcard"><h3>Composizione del patrimonio</h3><p class="muted">Nessun mese compilato nel ${Y}.</p></div>`;
@@ -430,20 +443,20 @@ function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
     <dl class="kv">${kv("Rendimento complessivo",rend("dash.plusTot","dash.plusTotP"),"strong")}</dl></div></div></a>
    ${(()=>{const y=R.deb.curY,tt=R.deb.perAnnoFT[y]||0,pg=R.deb.perAnnoFP[y]||0,dp=Math.max(tt-pg,0);
     return `<a class="psub" href="#tasse" data-act="go" data-tab="tasse" data-tpy="${y}" data-to="tp-box" title="Apri Tasse · anno ${y}"><h4>Tasse ${y} <small>${tt>0?Math.round(pg/tt*100)+"% pagato":""}</small></h4>
-    <div class="psub-in">${donut([["Già pagate",pg,"c-risp"],["Da pagare",dp,"c-tasse"]],112,15,"Tasse "+y,1)}<div><ul class="pleg">${li("c-risp","Già pagate",pg,tt)}${li("c-tasse","Da pagare",dp,tt)}</ul>
+    <div class="psub-in">${donut([["Già pagate",pg,"c-risp"],["Da pagare",dp,"c-tasse"]],112,15,"Tasse "+y+" ancora da pagare",1,dp,"da pagare")}<div><ul class="pleg">${li("c-risp","Già pagate",pg,tt)}${li("c-tasse","Da pagare",dp,tt)}</ul>
     <dl class="kv">${[y+1,y+2].map(z=>kv(`Da pagare nel ${z}`,`<span class="nt-tasse">${out(`deb.perAnnoF.${z}`)}</span>`)).join("")}</dl></div></div></a>`;})()}
    ${(()=>{const ym=TODAY.slice(0,7),m=+ym.slice(5)-1,rw=R.deb.rows,mn=MESI[m].toLowerCase(),ids=S.scadenzario.map((r,i)=>i).filter(i=>SD(S.scadenzario[i]).startsWith(ym)).sort((a,b)=>SD(S.scadenzario[a]).localeCompare(SD(S.scadenzario[b])));
     const isP=i=>paidOf(S.scadenzario[i]),tot=sum(ids.map(i=>rw[i].imp)),pg=sum(ids.filter(isP).map(i=>rw[i].imp)),dp=tot-pg,nd=ids.filter(i=>!isP(i)).length;
     const items=ids.map(i=>{const r=S.scadenzario[i],p=isP(i);return `<li class="sitem${p?" paid":""}"><i style="background:var(--${p?"c-risp":"c-spese"})"></i><span><b class="sd">${+SD(r).slice(8)}</b> ${esc(r.voce||"(senza descrizione)")}</span><b style="color:var(--t-${p?"risp":"spese"})">${fmt(rw[i].imp)}</b><em>${p?"✓":""}</em></li>`;}).join("");
     return `<a class="psub" href="#scadenzario" data-act="go" data-tab="scadenzario" data-ym="${ym}" title="Apri lo Scadenzario · ${mn}"><h4>Scadenze di ${mn} <small>${ids.length?(nd?nd+" da pagare":"tutto pagato"):"nessuna"}</small></h4>
-    <div class="psub-in">${donut([["Pagate",pg,"c-risp"],["Da pagare",dp,"c-spese"]],112,15,"Scadenze di "+mn,1,tot,"nel mese")}<div><ul class="pleg">${items||`<li><span class="muted">Nessuna scadenza questo mese</span></li>`}</ul>
+    <span hidden data-psum>${dp>0?fmt(Math.round(dp)).replace(/,\d\d(?=\s|$)/,""):"—"}</span><div class="psub-in"><div><ul class="pleg">${items||`<li><span class="muted">Nessuna scadenza questo mese</span></li>`}</ul>
     <dl class="kv">${kv("Già pagate",`<span class="nt-risp">${fmt(pg)}</span>`)}${kv("Da pagare",`<span class="nt-spese">${fmt(dp)}</span>`)}</dl></div></div></a>`;})()}
    ${rsp(R.sv&&R.sv.ya,"Uso delle entrate · media mensile",R.sv&&R.sv.yaLbl||"")}
    ${rsp(R.sv&&R.sv.last,"Uso delle entrate · ultimo mese",R.sv&&R.sv.last?R.sv.last.lbl:"",R.sv&&R.sv.last&&R.sv.last.ym)}
    ${(()=>{const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const sg=[["Speso",x.sp,"c-spese"],["Investito",x.inv,"c-inv"],["Surplus di liquidità",x.sur,"c-liq"]];
     return `<a class="psub" href="#entrate" data-act="go" data-tab="entrate" data-uy="${Y}" title="Apri Entrate e uscite ${Y}"><h4>Entrate e uscite ${Y} <small>${R.sv.yaLbl||""}</small></h4>
     <div class="psub-in">${donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),112,15,"Entrate e uscite "+Y,1,x.ent,"entrate")}<div><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,x.ent)).join("")}</ul>
-    <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${out("sv.ytd.tasse")}</span>`)}${kv("di cui spese fisse annuali",`<span class="nt-spese">${out("sv.ytd.fisse")}</span>`)}</dl></div></div></a>`;})()}
+    <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${out("sv.ytd.tasse")}</span>`)}${kv("di cui spese fisse",`<span class="nt-spese">${out("sv.ytd.fisse")}</span>`)}</dl></div></div></a>`;})()}
   </div></div></div>`;}
 function patPie(Y,vw=PT,dash=false){
  const open=dash?`<a class="box ppie box-link" href="#patrimonio" data-act="go" data-tab="patrimonio" data-pt="${vw}" title="Apri Patrimonio">`:`<div class="box ppie" id="ppie">`,close=dash?"</a>":"</div>";const P=R.patr[Y]||{},L=P.last,B=i=>`patrimonio.${Y}.${i}`,g=k=>+(getP(S,B(L)+"."+k)||0);
@@ -520,7 +533,7 @@ V.risparmio=()=>{const PY=R.PY;return `<section class="sheet">
    <div class="legend"><span><i style="background:var(--liq)"></i>Liquidità</span><span><i style="background:var(--inv)"></i>Investimenti</span><span><i style="background:var(--good);height:3px"></i>Patrimonio netto (dopo le tasse)</span></div></div>
   <div class="box" id="es-box"><h3>Entrate e spese mese per mese · ${PY}</h3>
    <div id="eschart"></div>
-   <div class="legend"><span><i style="background:var(--c-ent)"></i>entrate</span><span><i style="background:var(--c-spese)"></i>spese di vita</span><span><i style="background:var(--c-fisse)"></i>spese fisse annuali</span><span><i style="background:var(--c-tasse)"></i>tasse pagate</span></div>
+   <div class="legend"><span><i style="background:var(--c-ent)"></i>entrate</span><span><i style="background:var(--c-spese)"></i>spese di vita</span><span><i style="background:var(--c-fisse)"></i>spese fisse</span><span><i style="background:var(--c-tasse)"></i>tasse pagate</span></div>
    <p class="note">Per ogni mese: a sinistra le entrate registrate, a destra le uscite (spese di vita + spese fisse + tasse pagate). La differenza è il risparmio del mese, mostrato nel grafico sotto. Tocca una barra per i valori. Compaiono solo i mesi con i saldi di inizio e fine mese in Patrimonio.</p></div>
   <div class="box c-good" id="sv-box"><h3>Risparmio mese per mese · ${PY}</h3>
    <div id="svchart"></div>
@@ -539,22 +552,34 @@ V.mese=()=>{const L=monthsAvail();
  const k=L.indexOf(MM),Y=MM.slice(0,4),m=+MM.slice(5)-1,x=R.svAll[Y],g=q=>x[q][m],ent=g("ent");
  const sg=[["Risparmio netto",g("rn"),"c-risp"],["Da accantonare per tasse",g("acc"),"c-tasse"],["Spese (vita + fisse)",g("spT"),"c-spese"]];
  const yrs=[...new Set(L.map(v=>v.slice(0,4)))];
- const opts=yrs.map(y=>`<optgroup label="${y}">${L.filter(v=>v.startsWith(y)).map(v=>`<option value="${v}" ${v===MM?"selected":""}>${MESI[+v.slice(5)-1]} ${y}</option>`).join("")}</optgroup>`).join("");
+ const isNeg=v=>{const z=R.svAll[v.slice(0,4)],i=+v.slice(5)-1;return z&&z.rn[i]!=null&&z.rn[i]<0;};
+ const opts=yrs.map(y=>`<optgroup label="${y}">${L.filter(v=>v.startsWith(y)).map(v=>`<option value="${v}" ${v===MM?"selected":""}>${MESI[+v.slice(5)-1]} ${y}${isNeg(v)?" · in rosso":""}</option>`).join("")}</optgroup>`).join("");
+ const neg=g("rn")<0,usc=Math.max(g("spT")||0,0)+Math.max(g("acc")||0,0),def=neg?-g("rn"):0;
  const nav=(d,lab,ar)=>{const t=L[k+d];return `<button class="mbtn" data-act="mm" data-mm="${t||""}" ${t?"":"disabled"} aria-label="${lab}${t?": "+MESI[+t.slice(5)-1].toLowerCase()+" "+t.slice(0,4):""}">${ar}</button>`;};
- const dn=donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),170,26,"Uso delle entrate · "+MESI[m]+" "+Y,1,ent,"entrate").replace('class="pc1" style="','class="pc1" style="fill:var(--t-ent);');
+ const dn=neg
+  /* mese in rosso: la ciambella mostra le uscite; lo spicchio tratteggiato è la parte non coperta dalle entrate (presa dai risparmi) */
+  ?donut([["Coperte dalle entrate",Math.max(ent,0),"c-ent"],["Prese dai risparmi",def,"negh"]],170,26,"Uscite di "+MESI[m]+" "+Y,1,-def,"dai risparmi",v=>fmt(Math.round(v),"sign").replace(/,\d\d(?=\s|$)/,"")).replace('class="pc1" style="','class="pc1" style="fill:var(--neg);')
+  :donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),170,26,"Uso delle entrate · "+MESI[m]+" "+Y,1,ent,"entrate").replace('class="pc1" style="','class="pc1" style="fill:var(--t-ent);');
+ const barMax=Math.max(ent,usc,1),bw=v=>Math.max(0,Math.min(100,v/barMax*100)).toFixed(1);
+ const negBox=neg?`<div class="neg-cmp" role="img" aria-label="Entrate ${fmt(ent)}, uscite ${fmt(usc)}">
+   <div class="nc-r"><span>Entrate</span><div class="nc-t"><i class="nc-ent" style="width:${bw(ent)}%"></i></div><b class="nt-ent">${fmt(ent)}</b></div>
+   <div class="nc-r"><span>Uscite</span><div class="nc-t"><i class="nc-sp" style="width:${bw(Math.max(g("spT")||0,0))}%"></i><i class="nc-tx" style="width:${bw(Math.max(g("acc")||0,0))}%"></i></div><b class="neg">${fmt(usc)}</b></div>
+   <div class="nc-r nc-gap"><span></span><div class="nc-t"><i style="width:${bw(Math.min(ent,usc))}%;visibility:hidden"></i><i class="nc-def" style="width:${bw(def)}%"></i></div><b class="neg">${fmt(-def,"sign")}</b></div>
+   <p class="nc-l"><span><i class="nc-sp"></i>spese (vita + fisse)</span><span><i class="nc-tx"></i>da accantonare per tasse</span><span><i class="nc-def"></i>non coperto dalle entrate</span></p></div>`:"";
  const ya=R.ytdAll[Y],avg=ya&&ya.n?ya.ent/ya.n:null;
  return `<section class="sheet">
  <div class="sheet-h"><h2>Resoconto mensile</h2><p>Come hai usato le entrate di ogni mese: quanto è rimasto davvero, quanto mettere da parte per le tasse e quanto hai speso.</p></div>
  <div class="mnav" role="group" aria-label="Scegli il mese">${nav(-1,"Mese precedente","‹")}<select class="in sel mm-sel" id="mm-sel" aria-label="Mese">${opts}</select>${nav(1,"Mese successivo","›")}</div>
- <div class="box"><h3>Uso delle entrate <small>${MESI[m].toLowerCase()} ${Y}</small></h3>
-  <div class="ppie-in">${dn}<div class="pside"><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("")}</ul></div></div></div>
+ ${neg?`<div class="banner neg-b"><b>Mese in rosso</b>: le uscite (${fmt(usc)}) hanno superato le entrate (${fmt(ent)}) di <b>${fmt(def)}</b>, presi dai risparmi.${g("risp")<0?` La liquidità è scesa di ${fmt(-g("risp"))}.`:` La liquidità non è scesa (${fmt(g("risp"),"sign")}) solo perché le tasse da accantonare non sono ancora state pagate.`}</div>`:""}
+ <div class="box${neg?" neg-box":""}"><h3>${neg?"Entrate e uscite":"Uso delle entrate"} <small>${MESI[m].toLowerCase()} ${Y}</small></h3>
+  <div class="ppie-in">${dn}<div class="pside">${neg?negBox+`<ul class="pleg">${li("c-spese","Spese (vita + fisse)",g("spT")||0,usc)}${li("c-tasse","Da accantonare per tasse",g("acc")||0,usc)}</ul>`:`<ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("")}</ul>`}</div></div></div>
  <div class="box"><h3>Dettaglio del mese</h3><dl class="kv">
   ${kv("Entrate registrate",`<span class="nt-ent">${fmt(ent)}</span>`)}
   ${kv("Risparmio <small>variazione della liquidità + versamenti negli investimenti</small>",`<span class="${g("risp")<0?"neg":"pos"}">${fmt(g("risp"),"sign")}</span>`)}
   ${kv("di cui investito <small>versamenti ETF e movimenti del fondo</small>",`<span class="nt-inv">${fmt(g("inv"))}</span>`)}
   ${kv("Tasso di risparmio",fmt(g("tasso"),"pct1"))}
   ${kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)}
-  ${kv("Spese fisse annuali del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)}
+  ${kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)}
   ${kv("Altre spese (di vita)",`<span class="nt-spese">${fmt(g("spese"))}</span>`)}
   ${kv("Da accantonare per tasse <small>competenza del mese</small>",`<span class="nt-tasse">${fmt(g("acc"))}</span>`)}
   ${kv("Risparmio netto",`<span class="${g("rn")<0?"neg":"pos"}">${fmt(g("rn"),"sign")}</span>`,"strong")}
@@ -568,7 +593,7 @@ const euBox=Y=>{const x=R.ytdAll&&R.ytdAll[Y];
  const dn=donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),170,26,"Entrate e uscite "+Y,1,x.ent,"entrate").replace('class="pc1" style="','class="pc1" style="fill:var(--t-ent);');
  return `<div class="box" id="eu-box"><h3>Entrate e uscite ${Y} <small>${x.lbl} · ${x.n} ${x.n===1?"mese":"mesi"} con saldi</small></h3>
   <div class="ppie-in">${dn}<div class="pside"><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,x.ent)).join("")}</ul>
-  <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${fmt(x.tasse)}</span>`)}${kv("di cui spese fisse annuali",`<span class="nt-spese">${fmt(x.fisse)}</span>`)}</dl></div></div>
+  <dl class="kv">${kv("di cui tasse pagate",`<span class="nt-tasse">${fmt(x.tasse)}</span>`)}${kv("di cui spese fisse",`<span class="nt-spese">${fmt(x.fisse)}</span>`)}</dl></div></div>
   <p class="note">Solo i mesi con i saldi di inizio e fine mese: per questo le entrate qui possono differire dal totale della tabella sotto.</p></div>`;};
 V.entrate=()=>{
  const Y=UY,T=R.anni[Y],c=`anni.${Y}`;
@@ -888,7 +913,7 @@ function render(){
 const PSOPEN=new Set();
 function psubInit(){document.querySelectorAll("#view a.psub").forEach(el=>{const h=el.querySelector("h4");if(!h)return;
   const k=(h.firstChild&&h.firstChild.textContent||"").trim();el.dataset.k=k;const op=PSOPEN.has(k);el.classList.toggle("open",op);el.setAttribute("aria-expanded",op?"true":"false");
-  const c=el.querySelector("svg text.pc1"),r=document.createElement("span");r.className="pr";
+  const c=el.querySelector("[data-psum]")||el.querySelector("svg text.pc1"),r=document.createElement("span");r.className="pr";
   const cat=/^Liquidit/.test(k)?"liq":/^Investimenti/.test(k)?"inv":/^Tasse/.test(k)?"tasse":/^Scadenze/.test(k)?"spese":/^(Uso delle entrate|Entrate)/.test(k)?"ent":"",col=cat?`var(--t-${cat})`:"";if(c&&col)c.style.fill=col;
   r.innerHTML=`${c?`<span class="psum"${col?` style="color:${col}"`:""}>${c.textContent}</span>`:""}<span class="chev" data-act="ptog" role="button" aria-label="Apri o chiudi">›</span>`;h.appendChild(r);
   const t=document.createElement("span");t.className="phint";t.textContent="Tocca di nuovo per aprire la scheda ›";el.appendChild(t);});}
@@ -933,6 +958,7 @@ view.addEventListener("input",e=>{
    updateOutputs();scheduleSave();return;}
  if(k==="mese"){setP(S,el.dataset.i,+el.value);ensureRic(S);updateOutputs();scheduleSave();return;}
  if(k==="rif"){const r=getP(S,el.dataset.i),[t,a]=el.value.split(":");r.tipo=t||"";if(a)r.anno=+a;updateOutputs();scheduleSave();return;}
+ if(k==="sel"&&/^ricorrenti\.\d+\.freq$/.test(el.dataset.i)){const t=getP(S,el.dataset.i.replace(/\.freq$/,""));t.freq=el.value==="m"?"m":"a";if(t.freq==="m"){const d=new Date();t.da=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}ensureRic(S);render();scheduleSave();return;}
  if(k==="bool"||k==="text"||k==="date"||k==="sel"){setP(S,el.dataset.i,k==="bool"?el.checked:el.value);if(el.dataset.i.startsWith("ricorrenti."))ensureRic(S);
    const mm=el.dataset.i.match(/^scadenzario\.(\d+)\.(pagato|scadenza)$/);if(mm){const r=S.scadenzario[+mm[1]];
      if(mm[2]==="pagato"){r.forzaNonPagato=!el.checked&&!!r.scadenza&&SD(r)<=TODAY;}
@@ -964,10 +990,10 @@ view.addEventListener("click",e=>{
  if(a==="tog"){if(READONLY)return;const r=S.scadenzario.find(x=>x.id===b.dataset.id);if(r){const p=paidOf(r);if(p){r.pagato=false;r.forzaNonPagato=!!r.scadenza&&SD(r)<=TODAY;}else{r.pagato=true;r.forzaNonPagato=false;}r.dataPag=paidOf(r)?SD(r):"";render();scheduleSave();}return;}
  if(READONLY)return;
  if(a==="add-scad"){const t=TODAY.slice(4,10),nr={...scadRow("",+SY||UY,""),scadenza:/^\d{4}$/.test(SY)?SY+t:""};S.scadenzario.push(nr);EDIT=nr.id;}
- else if(a==="del-scad"){const r=S.scadenzario[+b.dataset.idx];if(r&&r.ric){const t=S.ricorrenti.find(x=>x.id===r.ric);if(t&&!t.esclusi.includes(r.anno))t.esclusi.push(r.anno);}S.scadenzario.splice(+b.dataset.idx,1);}
+ else if(a==="del-scad"){const r=S.scadenzario[+b.dataset.idx];if(r&&r.ric){const t=S.ricorrenti.find(x=>x.id===r.ric),k=r.rm||r.anno;if(t&&!t.esclusi.includes(k))t.esclusi.push(k);}S.scadenzario.splice(+b.dataset.idx,1);}
  else if(a==="add-fm"){S.fondoMov.push({id:uid(),data:new Date().toLocaleDateString("sv-SE"),tipo:"acquisto",importo:null,nota:""});}
  else if(a==="del-fm"){S.fondoMov.splice(+b.dataset.idx,1);}
- else if(a==="add-ric"){S.ricorrenti.push({id:"f"+uid(),voce:"",mese:new Date().getMonth()+1,importo:null,variabile:false,esclusi:[]});ensureRic(S);}
+ else if(a==="add-ric"){S.ricorrenti.push({id:"f"+uid(),voce:"",mese:new Date().getMonth()+1,importo:null,variabile:false,esclusi:[],freq:"a",giorno:1,da:""});ensureRic(S);}
  else if(a==="del-ric"){const t=S.ricorrenti.splice(+b.dataset.idx,1)[0];if(t)S.scadenzario=S.scadenzario.filter(r=>r.ric!==t.id||paidOf(r));}
  else if(a==="gen-enpam"){if(!S.scadenzario.some(r=>r.anno===y&&(r.auto==="enpam"||(r.auto==="qa"&&r.frazione<1)))){
    S.scadenzario=S.scadenzario.filter(r=>r.pagato||!(r.auto==="qa"&&r.anno===y));

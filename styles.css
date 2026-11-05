@@ -661,3 +661,20 @@ table.sv-leg{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:f
 body[data-sez="sondaggi"]{--sv-bg:#EEF1F4;background:var(--sv-bg)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) body[data-sez="sondaggi"]{--sv-bg:#161B22}}
 :root[data-theme="dark"] body[data-sez="sondaggi"]{--sv-bg:#161B22}
+/* Resoconto mensile: mese in rosso (risparmio netto negativo) */
+.banner.neg-b{border:1px solid var(--neg);border-left-width:5px;background:var(--neg-soft);margin-bottom:14px}
+.banner.neg-b b:first-child{color:var(--neg)}
+.box.neg-box{border-color:color-mix(in srgb,var(--neg) 45%,var(--line))}
+.box.neg-box h3::before{background:var(--neg)!important}
+.neg-cmp{display:grid;gap:6px;margin-bottom:6px}
+.nc-r{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
+.nc-r > span{color:var(--muted)}
+.nc-r b{font-family:var(--f-mono);font-size:13px;min-width:92px;text-align:right}
+.nc-t{display:flex;height:14px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.nc-t i{display:block;height:100%}
+.nc-gap .nc-t{background:none}
+.nc-ent{background:var(--c-ent)}.nc-sp{background:var(--c-spese)}.nc-tx{background:var(--c-tasse)}
+.nc-def{background:repeating-linear-gradient(45deg,var(--neg) 0 3px,var(--neg-soft) 3px 6px);border-radius:4px}
+.nc-l{display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 0;font-size:12px;color:var(--muted)}
+.nc-l i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.dn .pc2{fill:var(--muted)}

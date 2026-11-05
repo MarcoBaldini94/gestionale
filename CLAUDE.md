@@ -61,6 +61,11 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - Non modifica Entrate: è solo lettura + previsione.
 - Trigger: avvio, `visibilitychange`, `online`, ripristino, «Aggiorna ora». Stato in localStorage `bilancio-cart-stato`.
 
+## Spese fisse (`S.ricorrenti`) e Finanze (05/11/2026)
+- Modello `{id,voce,mese,importo,variabile,esclusi,freq:"a"|"m",giorno,da}`. Annuali (`freq:"a"`): una riga Scadenzario per anno (cy..cy+2) a fine mese. Mensili (`freq:"m"`, es. affitto): `ensureRicM` crea una riga per mese (campo `rm:"YYYY-MM"`) dal mese `da` (impostato quando si sceglie «mese») a dicembre dell'anno prossimo, il giorno `giorno`; righe del mese in corso e future non pagate si aggiornano se cambi voce/giorno. Eliminare una riga mensile la esclude (`esclusi` contiene "YYYY-MM").
+- Dashboard Finanze: «Scadenze di <mese>» senza ciambella (riepilogo in testata via `[data-psum]`, letto da `psubInit`); «Tasse <anno>» mostra al centro e in testata le tasse **ancora da pagare**.
+- Resoconto mensile: mese «in rosso» = risparmio netto < 0 → banner, ciambella delle uscite con spicchio tratteggiato non coperto dalle entrate (`negh`, pattern `hatch-neg`), barre entrate/uscite/scoperto; nel selettore i mesi in rosso hanno « · in rosso».
+
 ## Tema chiaro / scuro
 - Pulsante ☾/☀ nell'header (`#hdr-theme`). Senza scelta segue il sistema; la scelta va in localStorage `gestionale-tema` (`light`/`dark`) e viene applicata in `index.html` prima del CSS (niente lampo). Imposta `data-theme` su `<html>`: i token dark in `styles.css` esistono sia per `prefers-color-scheme` sia per `[data-theme="dark"]`. Aggiorna anche `meta theme-color`.
 
