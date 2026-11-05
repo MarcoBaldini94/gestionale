@@ -711,3 +711,7 @@ table.mvtab td:last-child{text-align:right;font-family:var(--f-mono)}
 table.mvtab tr.grp td{text-align:left!important;font-family:var(--f-body)!important;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:12px}
 @media (min-width:900px){.mvr{grid-template-columns:52px minmax(0,1fr) 110px minmax(260px,auto)}.mve{grid-column:auto;justify-content:flex-end}}
 .mve select.in.sel{flex:1 1 150px}
+table.mvtab td small{display:block;font-size:11px;color:var(--muted);font-family:var(--f-body);font-weight:400}
+.mvcond{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
+.mvcond > span{flex-basis:100%;font-weight:600;font-size:12px;color:var(--muted)}.mvcond > span small{font-weight:400}
+.mvcond label{display:inline-flex;gap:5px;align-items:center}
