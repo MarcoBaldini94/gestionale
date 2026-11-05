@@ -678,3 +678,8 @@ body[data-sez="sondaggi"]{--sv-bg:#EEF1F4;background:var(--sv-bg)}
 .nc-l{display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 0;font-size:12px;color:var(--muted)}
 .nc-l i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .dn .pc2{fill:var(--muted)}
+/* spese fisse mensili: giorno + mese di inizio */
+table.ric select.ricfreq{width:92px;min-width:0}
+table.ric td select.mesesel{width:130px;min-width:0}
+label.ricda{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)}
+label.ricda input.in{width:130px;min-width:0;text-align:left;font-family:var(--f-body);font-size:12.5px}

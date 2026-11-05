@@ -95,7 +95,11 @@ function freezePaid(s){const Rc=calc(s);s.scadenzario.forEach((r,i)=>{if(r.impor
 /* spese fisse: una voce nello Scadenzario per ogni modello, per l'anno in corso e i due successivi */
 /* spese fisse mensili (freq "m"): una voce per mese dal mese «da» (o dal mese in corso) a dicembre dell'anno prossimo, il giorno scelto (fine mese se manca) */
 function ensureRicM(s,t){const now=new Date(),cy=now.getFullYear(),cur=`${cy}-${String(now.getMonth()+1).padStart(2,"0")}`;if(!t.da)t.da=cur;
-  let y=+t.da.slice(0,4),m=+t.da.slice(5);if(`${y}-${String(m).padStart(2,"0")}`<cur.slice(0,4)+"-01"){y=cy;m=1;}
+  /* il mese di inizio si può portare indietro (es. affitto da febbraio): le righe passate risultano pagate e
+     contano come spese fisse di quei mesi; limite: gennaio di due anni fa. Le righe prima di «da» si tolgono. */
+  const minDa=(cy-2)+"-01";if(t.da<minDa)t.da=minDa;
+  s.scadenzario=s.scadenzario.filter(r=>r.ric!==t.id||!r.rm||r.rm>=t.da);
+  let y=+t.da.slice(0,4),m=+t.da.slice(5);
   for(;y<=cy+1;m++){if(m>12){m=1;y++;if(y>cy+1)break;}const mm=String(m).padStart(2,"0"),ym=`${y}-${mm}`;if(t.esclusi.includes(ym))continue;
     const dd=String(Math.min(t.giorno,new Date(y,m,0).getDate())).padStart(2,"0"),sc=`${ym}-${dd}`;
     let r=s.scadenzario.find(x=>x.ric===t.id&&x.anno===y&&(x.rm===ym));
@@ -400,7 +404,7 @@ V.scadenzario=()=>{
   <div class="tbl-wrap flat"><table class="ric"><thead><tr><th>Voce</th><th>Ogni</th><th>Quando</th><th>Importo</th><th>Varia</th><th></th></tr></thead><tbody>
   ${S.ricorrenti.map((t,i)=>`<tr><td>${inpT(`ricorrenti.${i}.voce`,"text","es. Bollo auto")}</td>
    <td><select class="in sel ricfreq" id="${idOf("ricorrenti."+i+".freq")}" data-i="ricorrenti.${i}.freq" data-k="sel" aria-label="Frequenza"><option value="a">anno</option><option value="m">mese</option></select></td>
-   <td>${t.freq==="m"?`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".giorno")}" data-i="ricorrenti.${i}.giorno" data-k="mese" aria-label="Giorno del mese">${Array.from({length:31},(_,k)=>`<option value="${k+1}">il ${k+1}</option>`).join("")}</select>`
+   <td>${t.freq==="m"?`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".giorno")}" data-i="ricorrenti.${i}.giorno" data-k="mese" aria-label="Giorno del mese">${Array.from({length:31},(_,k)=>`<option value="${k+1}">il ${k+1}</option>`).join("")}</select><label class="ricda">dal <input type="month" class="in ric-da" data-idx="${i}" value="${t.da||""}" aria-label="Primo mese"></label>`
      :`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".mese")}" data-i="ricorrenti.${i}.mese" data-k="mese" aria-label="Mese">${MESI.map((m,k)=>`<option value="${k+1}">${m}</option>`).join("")}</select>`}</td>
    <td class="imp">${inp(`ricorrenti.${i}.importo`)}</td><td class="c">${inpT(`ricorrenti.${i}.variabile`,"checkbox")}</td>
    <td class="c"><button class="icon-btn" data-act="del-ric" data-idx="${i}" aria-label="Elimina spesa fissa" ${READONLY?"disabled":""}>×</button></td></tr>`).join("")||`<tr><td colspan="6" class="muted">Nessuna spesa fissa.</td></tr>`}
@@ -944,6 +948,9 @@ document.getElementById("tabs").addEventListener("click",e=>{if(!e.target.closes
  const pa=parentOf(current)||"home";if(FROM===pa&&history.length>1)history.back();else location.hash=pa;});
 const view=document.getElementById("view");
 view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("tr.lk");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();go(r);}});
+view.addEventListener("change",e=>{const t=e.target;if(!t.classList||!t.classList.contains("ric-da")||READONLY)return;
+ const r=S.ricorrenti[+t.dataset.idx];if(!r||!/^\d{4}-\d{2}$/.test(t.value)){render();return;}
+ r.da=t.value;r.esclusi=r.esclusi.filter(x=>typeof x!=="string"||x>=r.da);ensureRic(S);render();scheduleSave();});
 view.addEventListener("change",e=>{if(e.target.id==="mm-sel"){MM=e.target.value;render();const s2=document.getElementById("mm-sel");if(s2)s2.focus();}});
 view.addEventListener("toggle",e=>{if(e.target.id==="calc-det")CALC_OPEN=e.target.open;if(e.target.id==="notes-det")NOTES_OPEN=e.target.open;if(e.target.id==="svt-det")SVT_OPEN=e.target.open;},true);
 view.addEventListener("input",e=>{
