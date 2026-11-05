@@ -922,7 +922,7 @@ function render(){
  const h=(location.hash||"").slice(1).split("?")[0];current=TABS.some(t=>t[0]===h)?h:"home";
  R=calc(S);if(UY==null||!allYears().includes(UY))UY=R.PY;
  renderTabs();if(current==="sondaggi"&&document.getElementById("sv-frame"))return; // l'app sondaggi resta aperta com'è
- document.getElementById("view").innerHTML=V[current]();if(current==="sondaggi")svFrameInit();psubInit();fillInputs(true);updateOutputs();
+ document.getElementById("view").innerHTML=V[current]();if(current==="sondaggi")svFrameInit();if(current==="movimenti")movFiltra();psubInit();fillInputs(true);updateOutputs();
 }
 /* sotto-sezioni della scheda principale: chiuse di default; 1° tocco apre, 2° tocco apre la scheda; la freccia richiude */
 const PSOPEN=new Set();
@@ -1078,13 +1078,38 @@ async function hubFetch(path,opt){
  finally{clearTimeout(to)}}
 async function sha(t){try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return t.length+":"+t.slice(-64)}}
 let hubBusy=false,hubTimer=null;
+/* ---- più dispositivi: prima di mandare dati al PC si controlla che nessun altro dispositivo abbia salvato
+   una versione più recente (base = ultimo file del PC che questo dispositivo ha visto; syncHash = impronta dei dati
+   in quel momento). Se sì: dati locali non modificati -> si adotta la versione del PC; modificati -> si chiede.
+   Evita che un dispositivo rimasto indietro sovrascriva il PC con dati vecchi (successo il 05/11/2026). */
+const canon=o=>JSON.stringify(o,(k,v)=>v&&typeof v==="object"&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
+let hubPullBusy=false;
+async function hubPull(){
+ if(hubPullBusy||!hubUrl())return;hubPullBusy=true;
+ try{const el=await hubFetch("/api/"+HUB_APP+"/backup/elenco"),latest=(el&&el.file||[])[0],st=hubState();
+  if(!latest||latest===st.base)return;
+  const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");if(!r||!r.dati)return;
+  let H;try{H=load(fromAnyBackup(r));}catch(e){return;}
+  const hHub=await sha(canon(H)),hLoc=await sha(canon(S));
+  if(hHub===hLoc){setHubState({base:r.file,syncHash:hLoc});return;}
+  const pulito=!hasRealData(S)||(st.syncHash&&st.syncHash===hLoc);
+  const quando=(m=>m?`${m[3]}/${m[2]} alle ${m[4]}:${m[5]}`:"?")(/(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})/.exec(r.file||""));
+  const qui=lsGet(LS_AGG),voci=x=>`${x.registro.length} movimenti, ${x.scadenzario.length} scadenze, ${x.ricorrenti.length} spese ricorrenti`;
+  if(pulito||confirm(`I dati su questo dispositivo sono diversi dall'ultimo backup sul PC (salvato da un altro dispositivo).\n\nPC: salvato il ${quando} · ${voci(H)}\nQuesto dispositivo: modificato ${qui?fmtWhen(Date.parse(qui)):"—"} · ${voci(S)}\n\nOK = usa la versione del PC (scegli questo se qui non hai fatto modifiche)\nAnnulla = tieni i dati di questo dispositivo: diventano il nuovo backup sul PC`)){
+   S=H;lsSet(LS_KEY,JSON.stringify(S));lsSet(LS_AGG,new Date().toISOString());
+   setHubState({base:r.file,syncHash:await sha(canon(S)),lastHash:""});status("ok","Aggiornato con i dati salvati da un altro dispositivo");
+   afterExternalChange();}
+  else setHubState({base:r.file});}
+ catch(e){/* PC non raggiungibile: si riprova alla prossima occasione */}
+ finally{hubPullBusy=false;}}
 async function hubSync(force){
  if(hubBusy||!hubUrl()||!hasRealData(S))return;
+ await hubPull();
  const body=JSON.stringify(S),h=await sha(body);
  if(!force&&hubState().lastHash===h)return;
  hubBusy=true;linkMsg("hub","Invio del backup al PC…");
  try{const r=await hubFetch("/api/"+HUB_APP+"/backup",{method:"POST",headers:{"Content-Type":"application/json"},body});
-  setHubState({lastOk:Date.now(),lastHash:h,lastErr:""});linkMsg("hub",r&&r.salvato===false?"Il PC ha già questa versione.":"Backup salvato sul PC"+(r&&r.file?" ("+r.file+")":"")+".");}
+  setHubState({lastOk:Date.now(),lastHash:h,lastErr:"",base:r&&r.file||hubState().base,syncHash:await sha(canon(S))});linkMsg("hub",r&&r.salvato===false?"Il PC ha già questa versione.":"Backup salvato sul PC"+(r&&r.file?" ("+r.file+")":"")+".");}
  catch(e){setHubState({lastErr:e.message,lastErrAt:Date.now()});linkMsg("hub","Backup non riuscito: "+e.message+". Riprovo alla prossima modifica.");}
  finally{hubBusy=false;refreshLinks();}}
 function scheduleHub(){clearTimeout(hubTimer);hubTimer=setTimeout(()=>hubSync(false),8000)}
@@ -1213,7 +1238,7 @@ view.addEventListener("click",async e=>{const b=e.target.closest("[data-act^='x-
  if(a==="x-hub-now"){if(!hubUrl()){linkMsg("hub","Inserisci prima l'indirizzo dell'Hub.");return;}if(!hasRealData(S)){linkMsg("hub","Non c'è ancora niente da salvare.");return;}hubSync(true);return;}
  if(a==="x-hub-restore"){try{linkMsg("hub","Scarico l'ultimo backup…");const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");const o=fromAnyBackup(r);
    if(hasRealData(S)&&!confirm("Sostituire i dati di questo dispositivo con il backup "+(r.file||"")+"?")){linkMsg("hub","Ripristino annullato.");return;}
-   replaceState(o);linkMsg("hub","Ripristinato "+(r.file||"l'ultimo backup")+".");sondSync(false);cedSync(false);cartSync(false);}
+   replaceState(o);setHubState({base:r.file,syncHash:await sha(canon(S))});linkMsg("hub","Ripristinato "+(r.file||"l'ultimo backup")+".");sondSync(false);cedSync(false);cartSync(false);}
   catch(err){linkMsg("hub","Ripristino non riuscito: "+err.message+".");}return;}
  if(a==="x-exp"){const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});const u=URL.createObjectURL(blob),l=document.createElement("a");
   l.href=u;l.download="gestionale-"+new Date().toLocaleDateString("sv-SE")+".json";document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);linkMsg("file","File scaricato.");return;}
@@ -1648,7 +1673,7 @@ const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra
 const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
 const MOV_COND_OK=["casa","spesa","svago","viaggi","vita","straord"];
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
-let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false;const MOV_PEND={}; // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
+let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false,MOV_Q="",MOV_FC="*";const MOV_PEND={}; // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
 function movStore(d){MOV=d;try{lsSet(MOV_KEY,JSON.stringify(d));}catch(e){}}
 async function movSync(manual,path,body){
@@ -1675,7 +1700,7 @@ function movPsub(){const d=movLoad();if(!d||!d.movimenti.length)return "";const 
   <div class="psub-in">${donut(usc,112,15,"Uscite di "+mn,1,tu,"uscite")}<div><ul class="pleg">${usc.map(([l,v,c])=>li(c,l,v,tu)).join("")||`<li><span class="muted">Nessuna uscita</span></li>`}</ul>
   <dl class="kv">${kv("Entrate del mese",`<span class="nt-ent">${fmt(N.te)}</span>`)}${N.R?kv("Rimborsi spese condivise",`<span class="nt-ent">${fmt(N.R,"sign")}</span>${N.G>0?" <small>ripartiti (stima)</small>":""}`):""}${o[""]?kv("Da classificare",fmt(o[""])):""}</dl></div></div></a>`;}
 V.movimenti=()=>{const d=movLoad(),L=movMesi();
- const head=`<div class="sheet-h"><h2>Movimenti dei conti</h2><p>Letti dagli estratti conto di Fineco (Excel) e Revolut (CSV) che salvi nella cartella «Finanze private (per gestionale)». Il PC li legge in locale; qui arrivano solo i movimenti, che restano su questo dispositivo e non entrano nei backup.</p></div>`;
+ const head=`<div class="sheet-h"><h2>Movimenti dei conti</h2><p>Dagli estratti conto Fineco e Revolut letti dal PC fisso. Restano su questo dispositivo e non entrano nei backup.</p></div>`;
  if(!d)return `<section class="sheet">${head}<div class="banner">${MOV_ERR?"Estratti conto non letti: "+esc(MOV_ERR)+".":hubUrl()?"Lettura in corso… se non compare nulla, controlla che l'Hub sul PC fisso sia aggiornato.":"Imposta l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div><div class="actions"><button class="btn" data-act="mov-agg">Aggiorna</button></div></section>`;
  if(!MOV_M||!L.includes(MOV_M))MOV_M=L[L.length-1];
  const ym=MOV_M,k=L.indexOf(ym),N=movNetto(ym),o=N.o,mv=d.movimenti.filter(m=>m.data.startsWith(ym));
@@ -1686,7 +1711,7 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
  const opt=(sel,prop)=>`<option value="">— scegli —</option>${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===(sel||prop)?"selected":""}>${l}</option>`).join("")}`;
  const riv=d.movimenti.filter(m=>m.rivedere&&m.data.startsWith(ym)),rivAll=d.movimenti.filter(m=>m.rivedere).length;
  const regK=new Set((d.regole||[]).map(r=>r.chiave)),pend=m=>MOV_PEND[m.id]||{};
- const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
+ const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}" data-c="${m.cat||""}" data-q="${esc(((m.descr||"")+" "+(m.dett||"")+" "+m.tipo+" "+m.conto).toLowerCase())}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
   ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(pend(m).cat!=null?pend(m).cat:(m.proposta||m.cat))}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${(pend(m).ric!=null?pend(m).ric:m.proposta!=="straord")?"checked":""}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
    :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Spuntato: questa controparte ha una regola e i suoi movimenti si classificano da soli"><input type="checkbox" class="mv-ric2" data-id="${m.id}" ${regK.has(m.chiave)?"checked":""}> sempre${regK.has(m.chiave)&&m.orig==="scelta"?" <small>(eccezione)</small>":""}</label></span>`}</div>`;
  const tr=(c,l)=>`<tr><td>${svDotC(MOV_COL[c])}${l}</td><td class="${o[c]<0?"nt-spese":o[c]>0?"nt-ent":""}">${o[c]?fmt(o[c],"sign"):"—"}</td></tr>`;
@@ -1695,7 +1720,8 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
  <div class="mnav" role="group" aria-label="Scegli il mese"><button class="mbtn" data-act="mov-m" data-d="-1" ${k>0?"":"disabled"} aria-label="Mese precedente">‹</button><select class="in sel mm-sel" id="mov-sel" aria-label="Mese">${L.map(v=>`<option value="${v}" ${v===ym?"selected":""}>${MESE_L(v)}</option>`).join("")}</select><button class="mbtn" data-act="mov-m" data-d="1" ${k<L.length-1?"":"disabled"} aria-label="Mese successivo">›</button></div>
  <div class="mqs">${q.map(qc).join("")||`<span class="mq na">Quadratura non disponibile</span>`}</div>
  ${riv.length?`<div class="box mv-riv"><h3>Da rivedere <small>${riv.length} in ${MESE_L(ym).toLowerCase()}${rivAll>riv.length?" · "+rivAll+" in tutto":""}</small></h3>
-  <p class="note">Scegli la categoria e conferma con ✓. Con «sempre» i prossimi movimenti della stessa controparte si classificano da soli. Le uscite di vita quotidiana sopra ${fmt(d.soglia||300)} sono proposte come spese straordinarie. I soldi che ti restituisce chi divide le spese con te vanno in «Rimborsi spese condivise»: non sono entrate, riducono le spese delle categorie che dividete.</p>
+  <p class="note">Scegli la categoria e conferma con ✓. Con «sempre» i prossimi movimenti della stessa controparte si classificano da soli.</p>
+  <details class="mvhelp"><summary>Come scegliere</summary><p class="note">Le uscite di vita quotidiana sopra ${fmt(d.soglia||300)} sono proposte come spese straordinarie. I soldi che ti restituisce chi divide le spese con te vanno in «Rimborsi spese condivise»: non sono entrate, riducono le spese delle categorie che dividete. Spostamenti tra i tuoi conti: «Giroconto». Quello che non vuoi contare: «Escluso dai conteggi».</p></details>
   <div class="mvl">${riv.map(m=>riga(m,true)).join("")}</div><div class="actions"><button class="btn" data-act="mov-okall">✓ Conferma tutte le proposte visibili</button></div></div>`
   :`<div class="banner sond-b">Tutti i movimenti di ${MESE_L(ym).toLowerCase()} sono classificati.${rivAll?` Ne restano ${rivAll} da rivedere in altri mesi.`:""}</div>`}
  <div class="grid">
@@ -1706,16 +1732,24 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
    <tr class="grp"><td colspan="2">Escluse dal bilancio</td></tr>${X.map(([c,l])=>tr(c,l)).join("")}
    ${o[""]?`<tr><td>Da classificare</td><td>${fmt(o[""],"sign")}</td></tr>`:""}
    </tbody><tfoot><tr><td>Entrate − uscite nette</td><td class="${te+tn<0?"neg":"pos"}">${fmt(te+tn,"sign")}</td></tr></tfoot></table></div>
-   <div class="mvcond"><span>Spese che dividete <small>(i rimborsi si ripartiscono su queste)</small></span>${MOV_COND_OK.map(c=>`<label><input type="checkbox" class="mv-cond" value="${c}" ${(S.movCond||[]).includes(c)?"checked":""} ${READONLY?"disabled":""}> ${movLbl(c)}</label>`).join("")}</div>
-   <p class="note">Le cifre con ≈ sono la tua quota stimata: i rimborsi del mese sono divisi tra le categorie spuntate in proporzione a quanto hai speso in ciascuna. Il totale delle uscite nette è esatto; la ripartizione per categoria è una stima, più precisa sulla media di più mesi. Giroconti, investimenti e movimenti esclusi non sono né entrate né uscite.</p></div>
+   <p class="note">Giroconti, investimenti e movimenti esclusi non sono né entrate né uscite.</p></div>
+  <div class="mvside">
   <div class="box"><h3>Per conto</h3><dl class="kv">${["Fineco","Revolut","Revolut deposito"].map(c=>{const s=mv.filter(m=>m.conto===c);return s.length?kv(c+` <small>${s.length} movimenti</small>`,fmt(sum(s.map(m=>m.importo)),"sign")):"";}).join("")}</dl>
    <p class="note">File letti: ${(d.file||[]).length}${(d.errori||[]).length?` · <span class="neg">${d.errori.length} illeggibili: ${d.errori.map(e=>esc(e.file)).join(", ")}</span>`:""}. Ultima lettura sul PC: ${d.aggiornato?fmtWhen(Date.parse(d.aggiornato)):"—"}.</p>
    <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
- </div>
- <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambia la categoria dal menu. «sempre» spuntato vuol dire che la controparte ha una regola: i suoi movimenti, passati e futuri, si classificano da soli. Spuntalo per creare la regola con la categoria del movimento, toglilo per eliminarla. Se cambi la categoria di un movimento con regola ti chiede se cambiarla a tutti o solo a quello (eccezione).</p><div class="mvl">${mv.map(m=>riga(m,false)).join("")}</div></details>
+  <div class="box"><h3>Spese che dividete</h3><div class="mvcond">${MOV_COND_OK.map(c=>`<label><input type="checkbox" class="mv-cond" value="${c}" ${(S.movCond||[]).includes(c)?"checked":""} ${READONLY?"disabled":""}> ${movLbl(c)}</label>`).join("")}</div>
+   <p class="note">I rimborsi del mese si ripartiscono sulle categorie spuntate, in proporzione a quanto hai speso in ciascuna: le cifre con ≈ sono la tua quota stimata. Il totale delle uscite nette è esatto; la ripartizione per categoria è una stima, più precisa sulla media di più mesi.</p></div>
+ </div></div>
+ <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambia la categoria dal menu. «sempre» spuntato = la controparte ha una regola e i suoi movimenti, passati e futuri, si classificano da soli: spuntalo per crearla, toglilo per eliminarla. Se cambi la categoria di un movimento con regola ti chiede se cambiarla a tutti o solo a quello.</p>
+  <div class="mvf"><input class="in" type="search" id="mov-q" placeholder="Cerca (es. Coop, Rachele…)" value="${esc(MOV_Q)}" aria-label="Cerca nei movimenti"><select class="in sel" id="mov-fc" aria-label="Filtra per categoria"><option value="*">Tutte le categorie</option>${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===MOV_FC?"selected":""}>${l}</option>`).join("")}<option value="" ${MOV_FC===""?"selected":""}>Da classificare</option></select><span class="mvn" id="mov-n"></span></div>
+  <div class="mvl" id="mov-list">${mv.map(m=>riga(m,false)).join("")}</div></details>
  ${(d.regole||[]).length?`<details class="more" ${MOV_REG?"open":""} id="mov-reg"><summary>Regole imparate (${d.regole.length})</summary><p class="note">Ogni regola classifica da sola tutti i movimenti di quella controparte. Cambiala dal menu o toglila con ×: i suoi movimenti tornano alla classificazione automatica o «da rivedere».</p>
-  <div class="mvl">${d.regole.map((r,i)=>`<div class="mvr"><span class="mvd">${r.n}×</span><span class="mvt"><b>${esc(r.descr)}</b><small>${esc(r.conto)}${r.tipo?" · "+esc(r.tipo):""}</small></span><span></span><span class="mve"><select class="in sel mv-rule" data-i="${i}" aria-label="Categoria della regola">${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===r.cat?"selected":""}>${l}</option>`).join("")}</select><button class="icon-btn" data-act="mov-rdel" data-i="${i}" aria-label="Togli la regola" title="Togli la regola">×</button></span></div>`).join("")}</div></details>`:""}
+  <div class="mvl">${d.regole.map((r,i)=>`<div class="mvr"><span class="mvd">${r.n}×</span><span class="mvt"><b>${esc(r.descr)}</b><small>${esc(r.conto)}${r.tipo?" · "+esc(r.tipo):""}</small></span><span></span><span class="mve"><select class="in sel mv-rule" data-ri="${i}" aria-label="Categoria della regola">${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===r.cat?"selected":""}>${l}</option>`).join("")}</select><button class="icon-btn" data-act="mov-rdel" data-ri="${i}" aria-label="Togli la regola" title="Togli la regola">×</button></span></div>`).join("")}</div></details>`:""}
 </section>`;};
+function movFiltra(){const L=document.getElementById("mov-list");if(!L)return;const q=MOV_Q.trim().toLowerCase();let n=0,t=0;
+ L.querySelectorAll(".mvr").forEach(r=>{t++;const ok=(MOV_FC==="*"||r.dataset.c===MOV_FC)&&(!q||r.dataset.q.includes(q));r.hidden=!ok;if(ok)n++;});
+ const c=document.getElementById("mov-n");if(c)c.textContent=n===t?"":n+" di "+t;}
+view.addEventListener("input",e=>{if(e.target.id==="mov-q"){MOV_Q=e.target.value;movFiltra();}});
 const svDotC=c=>`<i class="sv-dot" style="background:var(--${c})"></i>`;
 async function movClassifica(voci){if(!voci.length)return;voci.forEach(v=>{if(v.id)delete MOV_PEND[v.id];});await movSync(false,"/api/estratti/classifica",{voci});
  if(MOV_ERR)alert("Classificazione non salvata: "+MOV_ERR);}
@@ -1725,10 +1759,11 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']")
  const voce=id=>{const m=movLoad().movimenti.find(x=>x.id===id),s=document.querySelector(`.mv-cat[data-id="${id}"]`),r=document.querySelector(`.mv-ric[data-id="${id}"]`);
   return m&&s&&s.value?{id,chiave:m.chiave,cat:s.value,ricorda:!!(r&&r.checked)}:null;};
  if(a==="mov-ok"){const v=voce(b.dataset.id);if(!v){const s=document.querySelector(`.mv-cat[data-id="${b.dataset.id}"]`);if(s)s.focus();return;}movClassifica([v]);return;}
- if(a==="mov-rdel"){const r=(movLoad().regole||[])[+b.dataset.i];if(r&&confirm("Togliere la regola per «"+r.descr+"»?"))movClassifica([{chiave:r.chiave,cat:"",ricorda:true}]);return;}
+ if(a==="mov-rdel"){const r=(movLoad().regole||[])[+b.dataset.ri];if(r&&confirm("Togliere la regola per «"+r.descr+"»?"))movClassifica([{chiave:r.chiave,cat:"",ricorda:true}]);return;}
  if(a==="mov-okall"){movClassifica([...document.querySelectorAll(".mv-cat")].map(s=>voce(s.dataset.id)).filter(Boolean));return;}});
 view.addEventListener("change",e=>{const t=e.target;
  if(t.id==="mov-sel"){MOV_M=t.value;render();return;}
+ if(t.id==="mov-fc"){MOV_FC=t.value;movFiltra();return;}
  if(t.classList&&t.classList.contains("mv-cond")){if(READONLY)return;S.movCond=[...document.querySelectorAll(".mv-cond")].filter(x=>x.checked).map(x=>x.value);scheduleSave();render();return;}
  if(t.classList&&(t.classList.contains("mv-cat")||t.classList.contains("mv-ric"))){const id=t.dataset.id,P=MOV_PEND[id]=MOV_PEND[id]||{};
   if(t.classList.contains("mv-cat"))P.cat=t.value;else P.ric=t.checked;return;}
@@ -1742,7 +1777,7 @@ view.addEventListener("change",e=>{const t=e.target;
    movClassifica([{chiave:m.chiave,cat:m.cat,ricorda:true}]);return;}
   if(!confirm(`Togliere la regola per «${m.descr}»? Gli altri suoi movimenti torneranno alla classificazione automatica o «da rivedere»; questo resta «${movLbl(m.cat)}».`)){t.checked=true;return;}
   movClassifica([{chiave:m.chiave,cat:"",ricorda:true},{id:m.id,cat:m.cat}]);return;}
- if(t.classList&&t.classList.contains("mv-rule")){const r=(movLoad().regole||[])[+t.dataset.i];if(r)movClassifica([{chiave:r.chiave,cat:t.value,ricorda:true}]);}});
+ if(t.classList&&t.classList.contains("mv-rule")){const r=(movLoad().regole||[])[+t.dataset.ri];if(r)movClassifica([{chiave:r.chiave,cat:t.value,ricorda:true}]);}});
 view.addEventListener("toggle",e=>{if(e.target.id==="mov-all")MOV_ALL=e.target.open;if(e.target.id==="mov-reg")MOV_REG=e.target.open;},true);
 
 /* ================= tema chiaro / scuro ================= */
@@ -1764,9 +1799,9 @@ themeUI();
  else{S=load(null);status("busy","Nessun dato: importa o ripristina un backup");}
  svLoad();render();refreshLinks();
  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
- setTimeout(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);},1200);
+ setTimeout(()=>{hubPull().finally(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);});},1200);
  setTimeout(()=>svHubSync(false),4000);
- document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);}
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){hubPull().finally(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);});}
   else if(dirty)save();});
  window.addEventListener("pagehide",()=>{if(dirty)save();});
  window.addEventListener("online",()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);});

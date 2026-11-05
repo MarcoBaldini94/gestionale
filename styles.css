@@ -715,3 +715,34 @@ table.mvtab td small{display:block;font-size:11px;color:var(--muted);font-family
 .mvcond{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
 .mvcond > span{flex-basis:100%;font-weight:600;font-size:12px;color:var(--muted)}.mvcond > span small{font-weight:400}
 .mvcond label{display:inline-flex;gap:5px;align-items:center}
+/* movimenti: impaginazione v22 */
+table.mvtab{width:100%}
+table.mvtab td:first-child{white-space:normal;text-align:left}
+table.mvtab td:last-child{white-space:nowrap;width:1%;padding-left:12px}
+table.mvtab tfoot td{font-weight:600}
+.mqs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.mq{padding:6px 10px}
+.mvr{align-items:start}
+.mvd{padding-top:2px}
+.mvi{white-space:nowrap}
+.mvhelp{margin:-4px 0 6px}.mvhelp summary{font-size:12.5px;color:var(--muted);cursor:pointer}
+.mvside{display:grid;gap:16px;align-content:start}
+.mvside .box{margin:0}
+.mvcond{margin-top:4px;padding-top:0;border-top:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 14px}
+.mvf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 100px);z-index:2;background:var(--bg);padding:6px 0}
+.mvf .in{height:36px;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);font:inherit;font-family:var(--f-body);font-size:14px;padding:0 10px}
+.mvf input.in{flex:1 1 200px;min-width:0;text-align:left}
+.mvf select.in.sel{flex:0 1 220px;min-width:0}
+@media (max-width:560px){.mvf{position:static}.mvf input.in{flex-basis:100%}.mvf select.in.sel{flex:1 1 0}}
+.mvn{font-size:12px;color:var(--muted)}
+.mvr[hidden]{display:none}
+@media (min-width:900px){
+ .mnav{justify-content:center}.mnav select.mm-sel{flex:0 1 340px}
+ .mvr{align-items:center}.mvd{padding-top:0}
+}
+@media (max-width:560px){
+ .mvr{grid-template-columns:40px minmax(0,1fr) auto;gap:3px 8px}
+ .mve select.in.sel{flex:1 1 0}
+ .mqs{grid-template-columns:1fr;gap:6px}
+ .mq{flex-direction:row;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 10px;padding:6px 10px}
+}
