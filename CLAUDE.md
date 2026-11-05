@@ -5,7 +5,7 @@ Contesto per chi riprende il lavoro su questa cartella. Nessun dato personale qu
 ## Cos'è
 PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.github.io/gestionale/ (repo `MarcoBaldini94/gestionale`, branch `main`, root; rinominato il 04/11/2026 da `bilancio-personale`). App multifunzione a moduli: Bilancio (dashboard, patrimonio, entrate, tasse, scadenze, cedolini), Lavoro (cartellini), in futuro Sondaggi. Nata come porting dell'artefatto claude.ai "Bilancio personale" (ex foglio CALCOLO_TASSE_v3). Palette "Mediterranea": se si cambiano colori, verificare che siano coerenti in tutte le schede (token CSS in `:root`, varianti dark). Icona: tre nodi collegati (lavoro verde acqua, entrate terracotta, patrimonio bianco).
 
-**Nomi interni volutamente invariati** (per non perdere dati): localStorage `bilancio-personale-v1`, `bilancio-*-stato`, app Hub `bilancio` (backup in «Bilancio personale webapp/backup»). La cartella locale si chiama ancora «Bilancio personale webapp».
+**Nomi interni volutamente invariati** (per non perdere dati): localStorage `bilancio-personale-v1`, `bilancio-*-stato`, app Hub `bilancio` (backup in «Finanze private (per gestionale)/Gestionale/backup»). La cartella locale si chiama ancora «Bilancio personale webapp».
 
 ## File
 - `index.html` — scheletro (header, tabs, `#view`), registra `sw.js`.
@@ -16,7 +16,7 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 
 ## Dati e backup
 - localStorage `bilancio-personale-v1` = oggetto `S` (formato v3). Nessun server.
-- Hub su PC2 via Tailscale (cartella `Claude/Hub web app`): `POST /api/bilancio/backup` 8 s dopo ogni modifica (dedup per SHA-256), mai se `hasRealData(S)` è falso. File in `backup/` (gitignored). Ripristino: `GET /api/bilancio/backup/ultimo`.
+- Hub su PC2 via Tailscale (cartella `Claude/Hub web app`): `POST /api/bilancio/backup` 8 s dopo ogni modifica (dedup per SHA-256), mai se `hasRealData(S)` è falso. File in `OneDrive\Documenti\Marco\Finanze private (per gestionale)\Gestionale\backup` (dal 05/11/2026 i dati personali stanno fuori dalla cartella `Claude`; la vecchia `backup/` qui è gitignored e va svuotata). Cedolini, cartellini ed estratti conto: stessa cartella «Finanze private (per gestionale)», percorsi in `Hub web app/hub_config.json`. Ripristino: `GET /api/bilancio/backup/ultimo`.
 - URL Hub condiviso tra le app: chiave `hub-url`; stato in `bilancio-hub-stato`.
 - `.gitignore` esclude `backup/` e tutti i `.json` di esportazione/import: verificare `git ls-files` prima di ogni push.
 
@@ -67,6 +67,13 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 - Dashboard Finanze: «Scadenze di <mese>» senza ciambella (riepilogo in testata via `[data-psum]`, letto da `psubInit`); «Tasse <anno>» mostra al centro e in testata le tasse **ancora da pagare**.
 - Affitto = righe pagate delle spese fisse la cui voce contiene «affitt» (`isAff` in `calc`), serie `sv.aff` (anche m3/last/ya/ytd/ytdAll). Mostrato a parte (colore `--aff`/`c-aff`, testo `nt-aff`) in: Uso delle entrate (media mensile, ultimo mese: `spSeg`), Entrate e uscite (dashboard ed Entrate: `euSeg`, più «di cui affitto»), Andamento (grafico entrate/spese e tabella Dettaglio: colonne Affitto / Altre fisse), Resoconto mensile (ciambella, barre, «di cui affitto»).
 - Resoconto mensile: mese «in rosso» = risparmio netto < 0 → banner, ciambella delle uscite con spicchio tratteggiato non coperto dalle entrate (`negh`, pattern `hatch-neg`), barre entrate/uscite/scoperto; nel selettore i mesi in rosso hanno « · in rosso».
+
+## Movimenti dei conti (`#movimenti`, dal 05/11/2026)
+- L'Hub (`estratti_hub.py`) legge gli estratti conto in «Finanze private (per gestionale)»: Fineco `.xlsx` (zip+XML, solo libreria standard; colonne Data_Operazione…Moneymap, saldo finale in testa) e Revolut `.csv` (Tipo, Prodotto Attuale/Deposito, Importo, Costo, State, Saldo). `GET /api/estratti/archivio` → `{movimenti, quadratura, file, errori, categorie, soglia}`; `POST /api/estratti/classifica {voci:[{id,cat,chiave,ricorda}]}`; `POST /api/estratti/aggiorna`.
+- Categorie: stipendio, sondaggi, extra | casa, vita, straord, tasse | invest, giro. Ordine: scelta per movimento (`scelte.json`) > regola per controparte (`regole.json`, chiave `banca|tipo|controparte normalizzata`) > regola automatica (`categoria_auto`) > «da rivedere». Uscite «vita» ≥ 300 € automatiche → da rivedere con proposta «straord». Entrate da altre persone che rimborsano spese divise → «vita» (riduce le spese).
+- Quadratura: Revolut con il saldo progressivo di ogni riga (per prodotto); Fineco saldo finale del file vs mese precedente + movimenti (primo mese non verificabile, file parziale segnalato).
+- Nell'app: i movimenti NON entrano in `S` né nei backup (cache solo in localStorage `gestionale-movimenti`). Vista con mese, quadratura, «Da rivedere», entrate/uscite per categoria, tutti i movimenti; riquadro «Uscite dai conti» nella dashboard Finanze (`movPsub`). Trigger `movSync` come cedolini.
+- Fase 2 (da fare): usare le categorie dei movimenti nel Resoconto/Andamento al posto delle «spese di vita» calcolate per differenza.
 
 ## Tema chiaro / scuro
 - Pulsante ☾/☀ nell'header (`#hdr-theme`). Senza scelta segue il sistema; la scelta va in localStorage `gestionale-tema` (`light`/`dark`) e viene applicata in `index.html` prima del CSS (niente lampo). Imposta `data-theme` su `<html>`: i token dark in `styles.css` esistono sia per `prefers-color-scheme` sia per `[data-theme="dark"]`. Aggiorna anche `meta theme-color`.

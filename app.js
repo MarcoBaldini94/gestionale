@@ -329,7 +329,7 @@ const ICO={
  trend:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>'};
 
 /* ================= schede ================= */
-const TABS=[["home","Home"],["dashboard","Finanze"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],
+const TABS=[["home","Home"],["dashboard","Finanze"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["movimenti","Movimenti dei conti"],["parametri","Parametri"],
  ["lavoro","Lavoro"],["presenze","Presenze e ferie"],["lv-pag","Guardie e aggiuntiva"],["cedolini","Cedolini"],
  ["sondaggi","Sondaggi"],["collegamenti","Collegamenti e backup"]];
 /* tre sezioni (Lavoro, Finanze, Sondaggi), ognuna con la sua dashboard; ogni scheda torna alla dashboard della sua sezione */
@@ -462,6 +462,7 @@ function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
     return `<a class="psub" href="#scadenzario" data-act="go" data-tab="scadenzario" data-ym="${ym}" title="Apri lo Scadenzario · ${mn}"><h4>Scadenze di ${mn} <small>${ids.length?(nd?nd+" da pagare":"tutto pagato"):"nessuna"}</small></h4>
     <span hidden data-psum>${dp>0?fmt(Math.round(dp)).replace(/,\d\d(?=\s|$)/,""):"—"}</span><div class="psub-in"><div><ul class="pleg">${items||`<li><span class="muted">Nessuna scadenza questo mese</span></li>`}</ul>
     <dl class="kv">${kv("Già pagate",`<span class="nt-risp">${fmt(pg)}</span>`)}${kv("Da pagare",`<span class="nt-spese">${fmt(dp)}</span>`)}</dl></div></div></a>`;})()}
+   ${movPsub()}
    ${rsp(R.sv&&R.sv.ya,"Uso delle entrate · media mensile",R.sv&&R.sv.yaLbl||"")}
    ${rsp(R.sv&&R.sv.last,"Uso delle entrate · ultimo mese",R.sv&&R.sv.last?R.sv.last.lbl:"",R.sv&&R.sv.last&&R.sv.last.ym)}
    ${(()=>{const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const sg=euSeg(x);
@@ -1144,7 +1145,7 @@ async function sondSync(manual){
 const MESE_L=ym=>ym?MESI[+ym.slice(5,7)-1]+" "+ym.slice(0,4):"";
 function sondNote(){if(!S.sondExt)return "";
  return `<div class="banner sond-b"><b>Sondaggi automatici</b> da ${MESE_L(S.sondExt.da)}: ogni mese vale la somma dei <b>prelievi</b> registrati nell'app Guadagni sondaggi (le celle con «auto» non si modificano qui). Aggiornato: ${fmtWhen(Date.parse(S.sondExt.agg))}. <a href="#collegamenti">Dettagli</a></div>`;}
-const linkMsgs={hub:"",sond:"",file:"",ced:"",cart:""};
+const linkMsgs={hub:"",sond:"",file:"",ced:"",cart:"",mov:""};
 function linkMsg(k,t){linkMsgs[k]=t;const el=document.getElementById("lk-"+k+"-msg");if(el){el.textContent=t;el.hidden=!t;}}
 function hubBadge(){const s=hubState(),url=hubUrl();
  if(!url)return ["off","non attivo"];
@@ -1633,6 +1634,87 @@ V.home=()=>{const L=S.cart?S.cart.lista:[],x=L[L.length-1];svLoad();
  </div>
  <p class="note home-n">Tocca una sezione. I dati sono collegati: le ore del cartellino diventano pagamenti nel cedolino, il netto e i prelievi dei sondaggi entrano nelle Entrate di Finanze.</p>
 </section>`;};
+/* ================= movimenti dei conti (estratti conto Fineco e Revolut) ================= */
+/* L'Hub legge in locale gli estratti conto (cartella «Finanze private (per gestionale)») e pubblica
+   GET /api/estratti/archivio: movimenti con categoria (scelta / regola imparata / automatica / da rivedere)
+   e quadratura dei saldi. Qui: riepilogo del mese per categoria, lista «Da rivedere», tutti i movimenti.
+   I movimenti NON entrano in S né nei backup: copia locale in localStorage «gestionale-movimenti» per l'uso offline. */
+const MOV_KEY="gestionale-movimenti";
+const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra","Entrate extra","e"],["casa","Casa e utenze","u"],["vita","Vita quotidiana","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],["invest","Investimenti","x"],["giro","Giroconto (tra i tuoi conti)","x"]];
+const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",invest:"c-inv",giro:"c-fin"};
+const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
+let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false;
+function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
+function movStore(d){MOV=d;try{lsSet(MOV_KEY,JSON.stringify(d));}catch(e){}}
+async function movSync(manual,path,body){
+ if(MOV_BUSY||!hubUrl()){if(manual&&!hubUrl())linkMsg("mov","Serve l'indirizzo dell'Hub.");return;}
+ MOV_BUSY=true;if(manual)linkMsg("mov","Leggo gli estratti conto dal PC…");
+ try{const r=path?await hubFetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}):await hubFetch("/api/estratti/archivio");
+  const prima=JSON.stringify(movLoad()&&movLoad().movimenti||[]);movStore(r);MOV_ERR="";
+  if(manual)linkMsg("mov",r.movimenti.length+" movimenti letti.");
+  if(current==="movimenti"||(current==="dashboard"&&JSON.stringify(r.movimenti)!==prima))afterExternalChange();}
+ catch(e){MOV_ERR=e.message;if(manual)linkMsg("mov","Estratti conto non letti: "+e.message+".");if(current==="movimenti")afterExternalChange();}
+ finally{MOV_BUSY=false;refreshLinks();}}
+const movMesi=()=>{const d=movLoad();return d?[...new Set(d.movimenti.map(m=>m.data.slice(0,7)))].sort():[];};
+function movRiep(ym){const d=movLoad(),o={};MOV_CAT.forEach(([k])=>o[k]=0);o[""]=0;
+ (d?d.movimenti:[]).filter(m=>m.data.startsWith(ym)).forEach(m=>{o[m.cat||""]=(o[m.cat||""]||0)+m.importo;});return o;}
+/* riquadro nella dashboard di Finanze */
+function movPsub(){const d=movLoad();if(!d||!d.movimenti.length)return "";const L=movMesi(),ym=L[L.length-1],o=movRiep(ym),mn=MESE_L(ym).toLowerCase();
+ const nr=d.movimenti.filter(m=>m.rivedere).length,usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l,Math.max(-o[k],0),MOV_COL[k]]).filter(x=>x[1]>0),tu=sum(usc.map(x=>x[1]));
+ return `<a class="psub" href="#movimenti" data-act="go" data-tab="movimenti" title="Apri i movimenti dei conti"><h4>Uscite dai conti · ${mn} <small>${nr?nr+" da rivedere":"tutto classificato"}</small></h4>
+  <div class="psub-in">${donut(usc,112,15,"Uscite di "+mn,1,tu,"uscite")}<div><ul class="pleg">${usc.map(([l,v,c])=>li(c,l,v,tu)).join("")||`<li><span class="muted">Nessuna uscita</span></li>`}</ul>
+  <dl class="kv">${kv("Entrate del mese",`<span class="nt-ent">${fmt(MOV_CAT.filter(c=>c[2]==="e").reduce((a,[k])=>a+o[k],0))}</span>`)}${o[""]?kv("Da classificare",fmt(o[""])):""}</dl></div></div></a>`;}
+V.movimenti=()=>{const d=movLoad(),L=movMesi();
+ const head=`<div class="sheet-h"><h2>Movimenti dei conti</h2><p>Letti dagli estratti conto di Fineco (Excel) e Revolut (CSV) che salvi nella cartella «Finanze private (per gestionale)». Il PC li legge in locale; qui arrivano solo i movimenti, che restano su questo dispositivo e non entrano nei backup.</p></div>`;
+ if(!d)return `<section class="sheet">${head}<div class="banner">${MOV_ERR?"Estratti conto non letti: "+esc(MOV_ERR)+".":hubUrl()?"Lettura in corso… se non compare nulla, controlla che l'Hub sul PC fisso sia aggiornato.":"Imposta l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div><div class="actions"><button class="btn" data-act="mov-agg">Aggiorna</button></div></section>`;
+ if(!MOV_M||!L.includes(MOV_M))MOV_M=L[L.length-1];
+ const ym=MOV_M,k=L.indexOf(ym),o=movRiep(ym),mv=d.movimenti.filter(m=>m.data.startsWith(ym));
+ const E=MOV_CAT.filter(c=>c[2]==="e"),U=MOV_CAT.filter(c=>c[2]==="u"),X=MOV_CAT.filter(c=>c[2]==="x");
+ const te=sum(E.map(([c])=>o[c])),tu=sum(U.map(([c])=>o[c]));
+ const q=(d.quadratura||[]).filter(x=>x.mese===ym);
+ const qc=x=>`<span class="mq ${x.ok===true?"ok":x.ok===false?"ko":"na"}" title="${x.ok===false&&x.differenza!=null?"differenza "+fmt(x.differenza):""}">${esc(x.conto)} ${x.ok===true?"✓ quadra":x.ok===false?"⚠ non quadra"+(x.differenza!=null?" ("+fmt(x.differenza,"sign")+")":""):"· primo mese, non verificabile"}${x.parziale?" · file parziale":""}<small>${fmt(x.inizio)} → ${fmt(x.fine)}</small></span>`;
+ const opt=(sel,prop)=>`<option value="">— scegli —</option>${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===(sel||prop)?"selected":""}>${l}</option>`).join("")}`;
+ const riv=d.movimenti.filter(m=>m.rivedere&&m.data.startsWith(ym)),rivAll=d.movimenti.filter(m=>m.rivedere).length;
+ const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span>
+  ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(m.proposta||m.cat)}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${m.proposta==="straord"?"":"checked"}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
+   :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select></span>`}</div>`;
+ const tr=(c,l)=>`<tr><td>${svDotC(MOV_COL[c])}${l}</td><td class="${o[c]<0?"nt-spese":o[c]>0?"nt-ent":""}">${o[c]?fmt(o[c],"sign"):"—"}</td></tr>`;
+ return `<section class="sheet">${head}
+ <div class="mnav" role="group" aria-label="Scegli il mese"><button class="mbtn" data-act="mov-m" data-d="-1" ${k>0?"":"disabled"} aria-label="Mese precedente">‹</button><select class="in sel mm-sel" id="mov-sel" aria-label="Mese">${L.map(v=>`<option value="${v}" ${v===ym?"selected":""}>${MESE_L(v)}</option>`).join("")}</select><button class="mbtn" data-act="mov-m" data-d="1" ${k<L.length-1?"":"disabled"} aria-label="Mese successivo">›</button></div>
+ <div class="mqs">${q.map(qc).join("")||`<span class="mq na">Quadratura non disponibile</span>`}</div>
+ ${riv.length?`<div class="box mv-riv"><h3>Da rivedere <small>${riv.length} in ${MESE_L(ym).toLowerCase()}${rivAll>riv.length?" · "+rivAll+" in tutto":""}</small></h3>
+  <p class="note">Scegli la categoria e conferma con ✓. Con «sempre» i prossimi movimenti della stessa controparte si classificano da soli. Le uscite di vita quotidiana sopra ${fmt(d.soglia||300)} sono proposte come spese straordinarie. Un'entrata da un'altra persona che ti rimborsa una spesa divisa va in «Vita quotidiana»: riduce le spese invece di gonfiare le entrate.</p>
+  <div class="mvl">${riv.map(m=>riga(m,true)).join("")}</div><div class="actions"><button class="btn" data-act="mov-okall">✓ Conferma tutte le proposte visibili</button></div></div>`
+  :`<div class="banner sond-b">Tutti i movimenti di ${MESE_L(ym).toLowerCase()} sono classificati.${rivAll?` Ne restano ${rivAll} da rivedere in altri mesi.`:""}</div>`}
+ <div class="grid">
+  <div class="box"><h3>Entrate e uscite <small>${MESE_L(ym).toLowerCase()}</small></h3><div class="tbl-wrap flat"><table class="mvtab"><tbody>
+   <tr class="grp"><td colspan="2">Entrate · ${fmt(te)}</td></tr>${E.map(([c,l])=>tr(c,l)).join("")}
+   <tr class="grp"><td colspan="2">Uscite · ${fmt(-tu)}</td></tr>${U.map(([c,l])=>tr(c,l)).join("")}
+   <tr class="grp"><td colspan="2">Escluse dal bilancio</td></tr>${X.map(([c,l])=>tr(c,l)).join("")}
+   ${o[""]?`<tr><td>Da classificare</td><td>${fmt(o[""],"sign")}</td></tr>`:""}
+   </tbody><tfoot><tr><td>Entrate − uscite</td><td class="${te+tu<0?"neg":"pos"}">${fmt(te+tu,"sign")}</td></tr></tfoot></table></div>
+   <p class="note">Le uscite sono già al netto dei rimborsi ricevuti (entrate classificate come vita quotidiana). Giroconti e investimenti non sono né entrate né uscite.</p></div>
+  <div class="box"><h3>Per conto</h3><dl class="kv">${["Fineco","Revolut","Revolut deposito"].map(c=>{const s=mv.filter(m=>m.conto===c);return s.length?kv(c+` <small>${s.length} movimenti</small>`,fmt(sum(s.map(m=>m.importo)),"sign")):"";}).join("")}</dl>
+   <p class="note">File letti: ${(d.file||[]).length}${(d.errori||[]).length?` · <span class="neg">${d.errori.length} illeggibili: ${d.errori.map(e=>esc(e.file)).join(", ")}</span>`:""}. Ultima lettura sul PC: ${d.aggiornato?fmtWhen(Date.parse(d.aggiornato)):"—"}.</p>
+   <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
+ </div>
+ <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambiando la categoria qui la modifichi solo per quel movimento.</p><div class="mvl">${mv.map(m=>riga(m,false)).join("")}</div></details>
+</section>`;};
+const svDotC=c=>`<i class="sv-dot" style="background:var(--${c})"></i>`;
+async function movClassifica(voci){if(!voci.length)return;await movSync(false,"/api/estratti/classifica",{voci});
+ if(MOV_ERR)alert("Classificazione non salvata: "+MOV_ERR);}
+view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
+ if(a==="mov-agg"){movSync(true,"/api/estratti/aggiorna",{});return;}
+ if(a==="mov-m"){const L=movMesi(),k=L.indexOf(MOV_M)+ +b.dataset.d;if(L[k]){MOV_M=L[k];render();}return;}
+ const voce=id=>{const m=movLoad().movimenti.find(x=>x.id===id),s=document.querySelector(`.mv-cat[data-id="${id}"]`),r=document.querySelector(`.mv-ric[data-id="${id}"]`);
+  return m&&s&&s.value?{id,chiave:m.chiave,cat:s.value,ricorda:!!(r&&r.checked)}:null;};
+ if(a==="mov-ok"){const v=voce(b.dataset.id);if(!v){const s=document.querySelector(`.mv-cat[data-id="${b.dataset.id}"]`);if(s)s.focus();return;}movClassifica([v]);return;}
+ if(a==="mov-okall"){movClassifica([...document.querySelectorAll(".mv-cat")].map(s=>voce(s.dataset.id)).filter(Boolean));return;}});
+view.addEventListener("change",e=>{const t=e.target;
+ if(t.id==="mov-sel"){MOV_M=t.value;render();return;}
+ if(t.classList&&t.classList.contains("mv-set")){movClassifica([{id:t.dataset.id,cat:t.value}]);}});
+view.addEventListener("toggle",e=>{if(e.target.id==="mov-all")MOV_ALL=e.target.open;},true);
+
 /* ================= tema chiaro / scuro ================= */
 /* senza scelta segue il sistema; la scelta resta in localStorage «gestionale-tema» (applicata già in index.html prima del CSS) */
 const THEME_KEY="gestionale-tema",themeMQ=window.matchMedia?matchMedia("(prefers-color-scheme: dark)"):null;
@@ -1652,12 +1734,12 @@ themeUI();
  else{S=load(null);status("busy","Nessun dato: importa o ripristina un backup");}
  svLoad();render();refreshLinks();
  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
- setTimeout(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);},1200);
+ setTimeout(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);},1200);
  setTimeout(()=>svHubSync(false),4000);
- document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);cartSync(false);hubSync(false);}
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);}
   else if(dirty)save();});
  window.addEventListener("pagehide",()=>{if(dirty)save();});
- window.addEventListener("online",()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);});
+ window.addEventListener("online",()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);});
  window.addEventListener("storage",e=>{
   if(e.key===SOND_LS_KEY){svLoad();sondSync(false);if(["home"].includes(current))afterExternalChange();}
   else if(e.key===LS_KEY&&e.newValue&&!dirty){try{S=load(JSON.parse(e.newValue));afterExternalChange();}catch(_){}}});

@@ -689,3 +689,24 @@ label.ricda input.in{width:130px;min-width:0;text-align:left;font-family:var(--f
 
 /* affitto: sottovoce delle spese fisse (Uso delle entrate, Entrate e uscite, Andamento, Resoconto) */
 .nt-aff{color:var(--t-aff)}.nc-aff{background:var(--c-aff)}
+/* Movimenti dei conti (estratti conto) */
+.mqs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.mq{display:inline-flex;flex-direction:column;gap:1px;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
+.mq small{font-weight:400;font-family:var(--f-mono);color:var(--muted);font-size:11.5px}
+.mq.ok{border-color:color-mix(in srgb,var(--good) 45%,var(--line));color:var(--good)}
+.mq.ko{border-color:var(--neg);color:var(--neg);background:var(--neg-soft)}
+.mq.na{color:var(--muted)}
+.mv-riv{border-color:color-mix(in srgb,var(--tasse) 50%,var(--line))}
+.mvl{display:grid}
+.mvr{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.mvr:last-child{border-bottom:0}
+.mvd{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.mvt{display:grid;min-width:0}.mvt b{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mvt small{font-size:11.5px;color:var(--muted)}
+.mvi{font-family:var(--f-mono);font-size:13.5px;text-align:right;color:var(--t-spese)}.mvr.in .mvi{color:var(--t-ent)}
+.mve{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mve select.in.sel{min-width:0;width:auto;max-width:100%;font-size:12.5px;padding:3px 6px}
+.mvk{font-size:12px;color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+table.mvtab td:last-child{text-align:right;font-family:var(--f-mono)}
+table.mvtab tr.grp td{text-align:left!important;font-family:var(--f-body)!important;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:12px}
+@media (min-width:900px){.mvr{grid-template-columns:52px minmax(0,1fr) 110px minmax(260px,auto)}.mve{grid-column:auto;justify-content:flex-end}}
+.mve select.in.sel{flex:1 1 150px}
