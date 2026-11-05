@@ -1648,7 +1648,7 @@ const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra
 const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
 const MOV_COND_OK=["casa","spesa","svago","viaggi","vita","straord"];
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
-let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false;
+let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false;const MOV_PEND={}; // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
 function movStore(d){MOV=d;try{lsSet(MOV_KEY,JSON.stringify(d));}catch(e){}}
 async function movSync(manual,path,body){
@@ -1685,9 +1685,10 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
  const qc=x=>`<span class="mq ${x.ok===true?"ok":x.ok===false?"ko":"na"}" title="${x.ok===false&&x.differenza!=null?"differenza "+fmt(x.differenza):""}">${esc(x.conto)} ${x.ok===true?"✓ quadra":x.ok===false?"⚠ non quadra"+(x.differenza!=null?" ("+fmt(x.differenza,"sign")+")":""):"· primo mese, non verificabile"}${x.parziale?" · file parziale":""}<small>${fmt(x.inizio)} → ${fmt(x.fine)}</small></span>`;
  const opt=(sel,prop)=>`<option value="">— scegli —</option>${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===(sel||prop)?"selected":""}>${l}</option>`).join("")}`;
  const riv=d.movimenti.filter(m=>m.rivedere&&m.data.startsWith(ym)),rivAll=d.movimenti.filter(m=>m.rivedere).length;
+ const regK=new Set((d.regole||[]).map(r=>r.chiave)),pend=m=>MOV_PEND[m.id]||{};
  const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
-  ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(m.proposta||m.cat)}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${m.proposta==="straord"?"":"checked"}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
-   :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Applica la categoria a tutti i movimenti di questa controparte, anche futuri"><input type="checkbox" class="mv-ric2" data-id="${m.id}"> sempre</label></span>`}</div>`;
+  ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(pend(m).cat!=null?pend(m).cat:(m.proposta||m.cat))}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${(pend(m).ric!=null?pend(m).ric:m.proposta!=="straord")?"checked":""}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
+   :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Spuntato: questa controparte ha una regola e i suoi movimenti si classificano da soli"><input type="checkbox" class="mv-ric2" data-id="${m.id}" ${regK.has(m.chiave)?"checked":""}> sempre${regK.has(m.chiave)&&m.orig==="scelta"?" <small>(eccezione)</small>":""}</label></span>`}</div>`;
  const tr=(c,l)=>`<tr><td>${svDotC(MOV_COL[c])}${l}</td><td class="${o[c]<0?"nt-spese":o[c]>0?"nt-ent":""}">${o[c]?fmt(o[c],"sign"):"—"}</td></tr>`;
  const tu_=(c,l)=>N.alloc[c]?`<tr><td>${svDotC(MOV_COL[c])}${l}<small>lorda ${fmt(o[c],"sign")} · rimborsi ≈ ${fmt(N.alloc[c],"sign")}</small></td><td class="nt-spese">≈ ${fmt(N.net[c],"sign")}</td></tr>`:tr(c,l);
  return `<section class="sheet">${head}
@@ -1711,12 +1712,12 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
    <p class="note">File letti: ${(d.file||[]).length}${(d.errori||[]).length?` · <span class="neg">${d.errori.length} illeggibili: ${d.errori.map(e=>esc(e.file)).join(", ")}</span>`:""}. Ultima lettura sul PC: ${d.aggiornato?fmtWhen(Date.parse(d.aggiornato)):"—"}.</p>
    <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
  </div>
- <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambia la categoria dal menu. Senza «sempre» vale solo per quel movimento; con «sempre» (spuntalo prima di cambiare categoria) diventa la regola della controparte e vale per tutti i suoi movimenti, passati e futuri.</p><div class="mvl">${mv.map(m=>riga(m,false)).join("")}</div></details>
+ <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambia la categoria dal menu. «sempre» spuntato vuol dire che la controparte ha una regola: i suoi movimenti, passati e futuri, si classificano da soli. Spuntalo per creare la regola con la categoria del movimento, toglilo per eliminarla. Se cambi la categoria di un movimento con regola ti chiede se cambiarla a tutti o solo a quello (eccezione).</p><div class="mvl">${mv.map(m=>riga(m,false)).join("")}</div></details>
  ${(d.regole||[]).length?`<details class="more" ${MOV_REG?"open":""} id="mov-reg"><summary>Regole imparate (${d.regole.length})</summary><p class="note">Ogni regola classifica da sola tutti i movimenti di quella controparte. Cambiala dal menu o toglila con ×: i suoi movimenti tornano alla classificazione automatica o «da rivedere».</p>
   <div class="mvl">${d.regole.map((r,i)=>`<div class="mvr"><span class="mvd">${r.n}×</span><span class="mvt"><b>${esc(r.descr)}</b><small>${esc(r.conto)}${r.tipo?" · "+esc(r.tipo):""}</small></span><span></span><span class="mve"><select class="in sel mv-rule" data-i="${i}" aria-label="Categoria della regola">${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===r.cat?"selected":""}>${l}</option>`).join("")}</select><button class="icon-btn" data-act="mov-rdel" data-i="${i}" aria-label="Togli la regola" title="Togli la regola">×</button></span></div>`).join("")}</div></details>`:""}
 </section>`;};
 const svDotC=c=>`<i class="sv-dot" style="background:var(--${c})"></i>`;
-async function movClassifica(voci){if(!voci.length)return;await movSync(false,"/api/estratti/classifica",{voci});
+async function movClassifica(voci){if(!voci.length)return;voci.forEach(v=>{if(v.id)delete MOV_PEND[v.id];});await movSync(false,"/api/estratti/classifica",{voci});
  if(MOV_ERR)alert("Classificazione non salvata: "+MOV_ERR);}
 view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
  if(a==="mov-agg"){movSync(true,"/api/estratti/aggiorna",{});return;}
@@ -1729,8 +1730,18 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']")
 view.addEventListener("change",e=>{const t=e.target;
  if(t.id==="mov-sel"){MOV_M=t.value;render();return;}
  if(t.classList&&t.classList.contains("mv-cond")){if(READONLY)return;S.movCond=[...document.querySelectorAll(".mv-cond")].filter(x=>x.checked).map(x=>x.value);scheduleSave();render();return;}
- if(t.classList&&t.classList.contains("mv-set")){const m=movLoad().movimenti.find(x=>x.id===t.dataset.id),r=document.querySelector(`.mv-ric2[data-id="${t.dataset.id}"]`);
-  movClassifica([{id:t.dataset.id,chiave:m&&m.chiave,cat:t.value,ricorda:!!(r&&r.checked)}]);return;}
+ if(t.classList&&(t.classList.contains("mv-cat")||t.classList.contains("mv-ric"))){const id=t.dataset.id,P=MOV_PEND[id]=MOV_PEND[id]||{};
+  if(t.classList.contains("mv-cat"))P.cat=t.value;else P.ric=t.checked;return;}
+ if(t.classList&&t.classList.contains("mv-set")){const d=movLoad(),m=d.movimenti.find(x=>x.id===t.dataset.id);if(!m)return;
+  const haRegola=(d.regole||[]).some(r=>r.chiave===m.chiave);
+  /* controparte con regola: si chiede se cambiare tutti i suoi movimenti o solo questo (eccezione) */
+  const tutti=haRegola&&t.value!==""&&confirm(`«${m.descr}» ha una regola. Cambiare la categoria di TUTTI i suoi movimenti?\n\nOK = tutti (cambia la regola) · Annulla = solo questo movimento`);
+  movClassifica([{id:m.id,chiave:m.chiave,cat:t.value,ricorda:tutti}]);return;}
+ if(t.classList&&t.classList.contains("mv-ric2")){const d=movLoad(),m=d.movimenti.find(x=>x.id===t.dataset.id);if(!m)return;
+  if(t.checked){if(!m.cat){alert("Scegli prima la categoria dal menu.");t.checked=false;return;}
+   movClassifica([{chiave:m.chiave,cat:m.cat,ricorda:true}]);return;}
+  if(!confirm(`Togliere la regola per «${m.descr}»? Gli altri suoi movimenti torneranno alla classificazione automatica o «da rivedere»; questo resta «${movLbl(m.cat)}».`)){t.checked=true;return;}
+  movClassifica([{chiave:m.chiave,cat:"",ricorda:true},{id:m.id,cat:m.cat}]);return;}
  if(t.classList&&t.classList.contains("mv-rule")){const r=(movLoad().regole||[])[+t.dataset.i];if(r)movClassifica([{chiave:r.chiave,cat:t.value,ricorda:true}]);}});
 view.addEventListener("toggle",e=>{if(e.target.id==="mov-all")MOV_ALL=e.target.open;if(e.target.id==="mov-reg")MOV_REG=e.target.open;},true);
 
