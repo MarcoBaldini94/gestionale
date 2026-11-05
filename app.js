@@ -1640,8 +1640,8 @@ V.home=()=>{const L=S.cart?S.cart.lista:[],x=L[L.length-1];svLoad();
    e quadratura dei saldi. Qui: riepilogo del mese per categoria, lista «Da rivedere», tutti i movimenti.
    I movimenti NON entrano in S né nei backup: copia locale in localStorage «gestionale-movimenti» per l'uso offline. */
 const MOV_KEY="gestionale-movimenti";
-const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra","Entrate extra","e"],["casa","Casa e utenze","u"],["vita","Vita quotidiana","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],["invest","Investimenti","x"],["giro","Giroconto (tra i tuoi conti)","x"]];
-const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",invest:"c-inv",giro:"c-fin"};
+const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra","Entrate extra","e"],["casa","Casa e utenze","u"],["vita","Vita quotidiana","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],["invest","Investimenti","x"],["giro","Giroconto (tra i tuoi conti)","x"],["escl","Escluso dai conteggi","x"]];
+const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",invest:"c-inv",giro:"c-fin",escl:"muted"};
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
 let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false;
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
@@ -1693,7 +1693,7 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
    <tr class="grp"><td colspan="2">Escluse dal bilancio</td></tr>${X.map(([c,l])=>tr(c,l)).join("")}
    ${o[""]?`<tr><td>Da classificare</td><td>${fmt(o[""],"sign")}</td></tr>`:""}
    </tbody><tfoot><tr><td>Entrate − uscite</td><td class="${te+tu<0?"neg":"pos"}">${fmt(te+tu,"sign")}</td></tr></tfoot></table></div>
-   <p class="note">Le uscite sono già al netto dei rimborsi ricevuti (entrate classificate come vita quotidiana). Giroconti e investimenti non sono né entrate né uscite.</p></div>
+   <p class="note">Le uscite sono già al netto dei rimborsi ricevuti (entrate classificate come vita quotidiana). Giroconti, investimenti e movimenti esclusi non sono né entrate né uscite: per escluderne uno scegli «Escluso dai conteggi».</p></div>
   <div class="box"><h3>Per conto</h3><dl class="kv">${["Fineco","Revolut","Revolut deposito"].map(c=>{const s=mv.filter(m=>m.conto===c);return s.length?kv(c+` <small>${s.length} movimenti</small>`,fmt(sum(s.map(m=>m.importo)),"sign")):"";}).join("")}</dl>
    <p class="note">File letti: ${(d.file||[]).length}${(d.errori||[]).length?` · <span class="neg">${d.errori.length} illeggibili: ${d.errori.map(e=>esc(e.file)).join(", ")}</span>`:""}. Ultima lettura sul PC: ${d.aggiornato?fmtWhen(Date.parse(d.aggiornato)):"—"}.</p>
    <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
