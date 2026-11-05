@@ -1643,7 +1643,7 @@ const MOV_KEY="gestionale-movimenti";
 const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra","Entrate extra","e"],["casa","Casa e utenze","u"],["vita","Vita quotidiana","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],["invest","Investimenti","x"],["giro","Giroconto (tra i tuoi conti)","x"],["escl","Escluso dai conteggi","x"]];
 const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",invest:"c-inv",giro:"c-fin",escl:"muted"};
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
-let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false;
+let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false;
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
 function movStore(d){MOV=d;try{lsSet(MOV_KEY,JSON.stringify(d));}catch(e){}}
 async function movSync(manual,path,body){
@@ -1677,7 +1677,7 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
  const riv=d.movimenti.filter(m=>m.rivedere&&m.data.startsWith(ym)),rivAll=d.movimenti.filter(m=>m.rivedere).length;
  const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
   ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(m.proposta||m.cat)}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${m.proposta==="straord"?"":"checked"}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
-   :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select></span>`}</div>`;
+   :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Applica la categoria a tutti i movimenti di questa controparte, anche futuri"><input type="checkbox" class="mv-ric2" data-id="${m.id}"> sempre</label></span>`}</div>`;
  const tr=(c,l)=>`<tr><td>${svDotC(MOV_COL[c])}${l}</td><td class="${o[c]<0?"nt-spese":o[c]>0?"nt-ent":""}">${o[c]?fmt(o[c],"sign"):"—"}</td></tr>`;
  return `<section class="sheet">${head}
  <div class="mnav" role="group" aria-label="Scegli il mese"><button class="mbtn" data-act="mov-m" data-d="-1" ${k>0?"":"disabled"} aria-label="Mese precedente">‹</button><select class="in sel mm-sel" id="mov-sel" aria-label="Mese">${L.map(v=>`<option value="${v}" ${v===ym?"selected":""}>${MESE_L(v)}</option>`).join("")}</select><button class="mbtn" data-act="mov-m" data-d="1" ${k<L.length-1?"":"disabled"} aria-label="Mese successivo">›</button></div>
@@ -1698,7 +1698,9 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
    <p class="note">File letti: ${(d.file||[]).length}${(d.errori||[]).length?` · <span class="neg">${d.errori.length} illeggibili: ${d.errori.map(e=>esc(e.file)).join(", ")}</span>`:""}. Ultima lettura sul PC: ${d.aggiornato?fmtWhen(Date.parse(d.aggiornato)):"—"}.</p>
    <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
  </div>
- <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambiando la categoria qui la modifichi solo per quel movimento.</p><div class="mvl">${mv.map(m=>riga(m,false)).join("")}</div></details>
+ <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambia la categoria dal menu. Senza «sempre» vale solo per quel movimento; con «sempre» (spuntalo prima di cambiare categoria) diventa la regola della controparte e vale per tutti i suoi movimenti, passati e futuri.</p><div class="mvl">${mv.map(m=>riga(m,false)).join("")}</div></details>
+ ${(d.regole||[]).length?`<details class="more" ${MOV_REG?"open":""} id="mov-reg"><summary>Regole imparate (${d.regole.length})</summary><p class="note">Ogni regola classifica da sola tutti i movimenti di quella controparte. Cambiala dal menu o toglila con ×: i suoi movimenti tornano alla classificazione automatica o «da rivedere».</p>
+  <div class="mvl">${d.regole.map((r,i)=>`<div class="mvr"><span class="mvd">${r.n}×</span><span class="mvt"><b>${esc(r.descr)}</b><small>${esc(r.conto)}${r.tipo?" · "+esc(r.tipo):""}</small></span><span></span><span class="mve"><select class="in sel mv-rule" data-i="${i}" aria-label="Categoria della regola">${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===r.cat?"selected":""}>${l}</option>`).join("")}</select><button class="icon-btn" data-act="mov-rdel" data-i="${i}" aria-label="Togli la regola" title="Togli la regola">×</button></span></div>`).join("")}</div></details>`:""}
 </section>`;};
 const svDotC=c=>`<i class="sv-dot" style="background:var(--${c})"></i>`;
 async function movClassifica(voci){if(!voci.length)return;await movSync(false,"/api/estratti/classifica",{voci});
@@ -1709,11 +1711,14 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']")
  const voce=id=>{const m=movLoad().movimenti.find(x=>x.id===id),s=document.querySelector(`.mv-cat[data-id="${id}"]`),r=document.querySelector(`.mv-ric[data-id="${id}"]`);
   return m&&s&&s.value?{id,chiave:m.chiave,cat:s.value,ricorda:!!(r&&r.checked)}:null;};
  if(a==="mov-ok"){const v=voce(b.dataset.id);if(!v){const s=document.querySelector(`.mv-cat[data-id="${b.dataset.id}"]`);if(s)s.focus();return;}movClassifica([v]);return;}
+ if(a==="mov-rdel"){const r=(movLoad().regole||[])[+b.dataset.i];if(r&&confirm("Togliere la regola per «"+r.descr+"»?"))movClassifica([{chiave:r.chiave,cat:"",ricorda:true}]);return;}
  if(a==="mov-okall"){movClassifica([...document.querySelectorAll(".mv-cat")].map(s=>voce(s.dataset.id)).filter(Boolean));return;}});
 view.addEventListener("change",e=>{const t=e.target;
  if(t.id==="mov-sel"){MOV_M=t.value;render();return;}
- if(t.classList&&t.classList.contains("mv-set")){movClassifica([{id:t.dataset.id,cat:t.value}]);}});
-view.addEventListener("toggle",e=>{if(e.target.id==="mov-all")MOV_ALL=e.target.open;},true);
+ if(t.classList&&t.classList.contains("mv-set")){const m=movLoad().movimenti.find(x=>x.id===t.dataset.id),r=document.querySelector(`.mv-ric2[data-id="${t.dataset.id}"]`);
+  movClassifica([{id:t.dataset.id,chiave:m&&m.chiave,cat:t.value,ricorda:!!(r&&r.checked)}]);return;}
+ if(t.classList&&t.classList.contains("mv-rule")){const r=(movLoad().regole||[])[+t.dataset.i];if(r)movClassifica([{chiave:r.chiave,cat:t.value,ricorda:true}]);}});
+view.addEventListener("toggle",e=>{if(e.target.id==="mov-all")MOV_ALL=e.target.open;if(e.target.id==="mov-reg")MOV_REG=e.target.open;},true);
 
 /* ================= tema chiaro / scuro ================= */
 /* senza scelta segue il sistema; la scelta resta in localStorage «gestionale-tema» (applicata già in index.html prima del CSS) */
