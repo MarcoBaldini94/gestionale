@@ -19,7 +19,7 @@ const scadRow=(voce,anno,auto,frazione,scadenza)=>({id:uid(),voce,anno,auto:auto
 const isY=y=>/^\d{4}$/.test(String(y));
 
 function defaults(){const y=new Date().getFullYear();return{v:3,anni:{[y]:{...DEF_ANNO}},globali:{...DEF_GLOB},registro:[],patrimonio:{[y]:blankPat()},
-  chiusure:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"]};}
+  chiusure:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{}};}
 
 /* conversione dal formato del foglio (v1/v2): mesi → registro movimenti, parametri → tabella per anno */
 function migrate(o){
@@ -72,6 +72,7 @@ function sanitize(s){
   o.prev={entrate:num(s.prev&&s.prev.entrate),spese:num(s.prev&&s.prev.spese),inv:num(s.prev&&s.prev.inv)};
   o.gen=(Array.isArray(s.gen)?s.gen:[]).filter(x=>typeof x==="string");
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
+  o.sondCanali={};if(s.sondCanali&&typeof s.sondCanali==="object")Object.entries(s.sondCanali).forEach(([k,v])=>{if(/^[a-z0-9_-]{1,48}$/.test(k)&&["banca","paypal","amazon"].includes(v))o.sondCanali[k]=v;});
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
     mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
@@ -1666,11 +1667,12 @@ V.home=()=>{const L=S.cart?S.cart.lista:[],x=L[L.length-1];svLoad();
    e quadratura dei saldi. Qui: riepilogo del mese per categoria, lista «Da rivedere», tutti i movimenti.
    I movimenti NON entrano in S né nei backup: copia locale in localStorage «gestionale-movimenti» per l'uso offline. */
 const MOV_KEY="gestionale-movimenti";
-const MOV_CAT=[["stipendio","Stipendio","e"],["sondaggi","Sondaggi","e"],["extra","Entrate extra","e"],
+const MOV_CAT=[["stipendio","Stipendio","e"],["extra","Entrate extra","e"],
  ["casa","Casa e utenze","u"],["spesa","Spesa","u"],["svago","Ristoranti e svago","u"],["viaggi","Viaggi","u"],["vita","Altre spese quotidiane","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],
  ["rimb","Rimborsi spese condivise","r"],
+ ["sondaggi","Sondaggi arrivati in banca","p"],["paypal","Da PayPal (passaggio)","p"],
  ["invest","Investimenti","x"],["giro","Giroconto (tra i tuoi conti)","x"],["escl","Escluso dai conteggi","x"]];
-const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
+const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",paypal:"c-fin",amz:"c-liq",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
 const MOV_COND_OK=["casa","spesa","svago","viaggi","vita","straord"];
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
 let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false,MOV_Q="",MOV_FC="*";const MOV_PEND={}; // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
@@ -1688,11 +1690,33 @@ async function movSync(manual,path,body){
 const movMesi=()=>{const d=movLoad();return d?[...new Set(d.movimenti.map(m=>m.data.slice(0,7)))].sort():[];};
 function movRiep(ym){const d=movLoad(),o={};MOV_CAT.forEach(([k])=>o[k]=0);o[""]=0;
  (d?d.movimenti:[]).filter(m=>m.data.startsWith(ym)).forEach(m=>{o[m.cat||""]=(o[m.cat||""]||0)+m.importo;});return o;}
-/* rimborsi spese condivise ripartiti sulle categorie che dividete (S.movCond), in proporzione alla spesa lorda del mese: stima */
+/* rimborsi spese condivise (v24, regola di Marco): prima la quota d'affitto (= importo delle spese fisse mensili
+   «affitt…» in vigore quel mese, cioè la metà che paga l'altra persona) va tutta a «Casa e utenze»; il resto si divide
+   in parti uguali tra le categorie che dividete (S.movCond), senza superare la spesa lorda di ciascuna (l'eccedenza
+   passa alle altre). Il totale netto è esatto, la ripartizione per categoria è una stima. */
+const affQuota=ym=>sum((S.ricorrenti||[]).filter(t=>t.freq==="m"&&/affitt/i.test(t.voce||"")&&(t.da||"")<=ym&&!(t.esclusi||[]).includes(ym)).map(t=>+t.importo||0));
 function movNetto(ym){const o=movRiep(ym),cond=(S.movCond||[]).filter(c=>MOV_COND_OK.includes(c)),R=o.rimb||0;
- const G=sum(cond.map(c=>Math.max(-o[c],0))),alloc={},net={};
- MOV_CAT.filter(c=>c[2]==="u").forEach(([c])=>{alloc[c]=G>0&&cond.includes(c)?R*Math.max(-o[c],0)/G:0;net[c]=o[c]+alloc[c];});
- return{o,R,G,cond,alloc,net,nonRip:G>0?0:R,te:sum(MOV_CAT.filter(c=>c[2]==="e").map(([c])=>o[c])),tu:sum(MOV_CAT.filter(c=>c[2]==="u").map(([c])=>o[c]))};}
+ const U=MOV_CAT.filter(c=>c[2]==="u").map(c=>c[0]),lordo=c=>Math.max(-o[c],0),alloc={},net={};U.forEach(c=>alloc[c]=0);
+ const aff=R>0?Math.min(R,affQuota(ym),lordo("casa")):0;alloc.casa=aff;let rest=R>0?R-aff:0;
+ let att=cond.filter(c=>lordo(c)-alloc[c]>0.005);
+ while(rest>0.005&&att.length){const q=rest/att.length;att.forEach(c=>{const x=Math.min(q,lordo(c)-alloc[c]);alloc[c]+=x;rest-=x;});att=att.filter(c=>lordo(c)-alloc[c]>0.005);}
+ U.forEach(c=>net[c]=o[c]+alloc[c]);const G=sum(cond.map(lordo));
+ const sv=sondMese(ym),amz=sv.amazon,pa=ppAuto(ym),ppx=pa.extra;
+ return{o,R,G,aff,cond,alloc,net,nonRip:R>0?rest:R,sv,amz,pa,ppx,te:sum(MOV_CAT.filter(c=>c[2]==="e").map(([c])=>o[c]))+sv.tot+ppx,tu:sum(MOV_CAT.filter(c=>c[2]==="u").map(([c])=>o[c]))-amz,
+  nonArr:sv.banca-(o.sondaggi||0)+sv.paypal+ppx-(o.paypal||0)};}
+/* sondaggi (proposta A, v25): l'app Guadagni fa fede. I prelievi del mese per portale si dividono per canale di pagamento
+   (S.sondCanali: banca | paypal | amazon; non indicato = banca). Gli accrediti in banca dai portali («sondaggi») e i
+   trasferimenti da PayPal («paypal») sono passaggi, non entrate; i buoni Amazon sono entrata + uscita di pari importo. */
+const SOND_CAN=[["banca","Banca"],["paypal","PayPal"],["amazon","Buono Amazon"]];
+/* entrate extra via PayPal (regola di Marco, v27): atteso da PayPal = prelievi sondaggi non Amazon (banca+PayPal, app)
+   − accrediti diretti dei portali in banca («sondaggi») + residuo ancora atteso dal mese prima. Se da PayPal arriva più
+   dell'atteso, la differenza è entrata extra ottenuta via PayPal; se arriva meno, il resto passa al mese dopo (residuo). */
+function ppAuto(ym){const L=movMesi().filter(m=>m<=ym);let res=0,r=null;
+ L.forEach(m=>{const sv=sondMese(m),o=movRiep(m),prima=res,att=sv.banca+sv.paypal-(o.sondaggi||0)+prima,arr=o.paypal||0;
+  res=Math.max(att-arr,0);r={prima,att,arr,extra:Math.max(arr-Math.max(att,0),0),res};});
+ return r||{prima:0,att:0,arr:0,extra:0,res:0};}
+function sondMese(ym){svLoad();const r={banca:0,paypal:0,amazon:0,tot:0,senza:[]};
+ SV.sites.forEach(s=>{const v=svGet(ym,s.id,"p")/100;if(!v)return;const c=(S.sondCanali||{})[s.id];r[c||"banca"]+=v;r.tot+=v;if(!c)r.senza.push(s.name);});return r;}
 /* riquadro nella dashboard di Finanze */
 function movPsub(){const d=movLoad();if(!d||!d.movimenti.length)return "";const L=movMesi(),ym=L[L.length-1],N=movNetto(ym),o=N.o,mn=MESE_L(ym).toLowerCase();
  const nr=d.movimenti.filter(m=>m.rivedere).length,usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l,Math.max(-N.net[k],0),MOV_COL[k]]).filter(x=>x[1]>0),tu=sum(usc.map(x=>x[1]));
@@ -1704,7 +1728,7 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
  if(!d)return `<section class="sheet">${head}<div class="banner">${MOV_ERR?"Estratti conto non letti: "+esc(MOV_ERR)+".":hubUrl()?"Lettura in corso… se non compare nulla, controlla che l'Hub sul PC fisso sia aggiornato.":"Imposta l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div><div class="actions"><button class="btn" data-act="mov-agg">Aggiorna</button></div></section>`;
  if(!MOV_M||!L.includes(MOV_M))MOV_M=L[L.length-1];
  const ym=MOV_M,k=L.indexOf(ym),N=movNetto(ym),o=N.o,mv=d.movimenti.filter(m=>m.data.startsWith(ym));
- const E=MOV_CAT.filter(c=>c[2]==="e"),U=MOV_CAT.filter(c=>c[2]==="u"),X=MOV_CAT.filter(c=>c[2]==="x");
+ const E=MOV_CAT.filter(c=>c[2]==="e"),U=MOV_CAT.filter(c=>c[2]==="u"),X=MOV_CAT.filter(c=>c[2]==="x"),P=MOV_CAT.filter(c=>c[2]==="p");
  const te=N.te,tu=N.tu,tn=tu+N.R;
  const q=(d.quadratura||[]).filter(x=>x.mese===ym);
  const qc=x=>`<span class="mq ${x.ok===true?"ok":x.ok===false?"ko":"na"}" title="${x.ok===false&&x.differenza!=null?"differenza "+fmt(x.differenza):""}">${esc(x.conto)} ${x.ok===true?"✓ quadra":x.ok===false?"⚠ non quadra"+(x.differenza!=null?" ("+fmt(x.differenza,"sign")+")":""):"· primo mese, non verificabile"}${x.parziale?" · file parziale":""}<small>${fmt(x.inizio)} → ${fmt(x.fine)}</small></span>`;
@@ -1715,7 +1739,7 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
   ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(pend(m).cat!=null?pend(m).cat:(m.proposta||m.cat))}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${(pend(m).ric!=null?pend(m).ric:m.proposta!=="straord")?"checked":""}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
    :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Spuntato: questa controparte ha una regola e i suoi movimenti si classificano da soli"><input type="checkbox" class="mv-ric2" data-id="${m.id}" ${regK.has(m.chiave)?"checked":""}> sempre${regK.has(m.chiave)&&m.orig==="scelta"?" <small>(eccezione)</small>":""}</label></span>`}</div>`;
  const tr=(c,l)=>`<tr><td>${svDotC(MOV_COL[c])}${l}</td><td class="${o[c]<0?"nt-spese":o[c]>0?"nt-ent":""}">${o[c]?fmt(o[c],"sign"):"—"}</td></tr>`;
- const tu_=(c,l)=>N.alloc[c]?`<tr><td>${svDotC(MOV_COL[c])}${l}<small>lorda ${fmt(o[c],"sign")} · rimborsi ≈ ${fmt(N.alloc[c],"sign")}</small></td><td class="nt-spese">≈ ${fmt(N.net[c],"sign")}</td></tr>`:tr(c,l);
+ const tu_=(c,l)=>N.alloc[c]?`<tr><td>${svDotC(MOV_COL[c])}${l}<small>lorda ${fmt(o[c],"sign")} · rimborsi ${c==="casa"&&N.aff?`quota affitto ${fmt(N.aff,"sign")}${N.alloc[c]-N.aff>0.005?" + ≈ "+fmt(N.alloc[c]-N.aff,"sign"):""}`:"≈ "+fmt(N.alloc[c],"sign")}</small></td><td class="nt-spese">≈ ${fmt(N.net[c],"sign")}</td></tr>`:tr(c,l);
  return `<section class="sheet">${head}
  <div class="mnav" role="group" aria-label="Scegli il mese"><button class="mbtn" data-act="mov-m" data-d="-1" ${k>0?"":"disabled"} aria-label="Mese precedente">‹</button><select class="in sel mm-sel" id="mov-sel" aria-label="Mese">${L.map(v=>`<option value="${v}" ${v===ym?"selected":""}>${MESE_L(v)}</option>`).join("")}</select><button class="mbtn" data-act="mov-m" data-d="1" ${k<L.length-1?"":"disabled"} aria-label="Mese successivo">›</button></div>
  <div class="mqs">${q.map(qc).join("")||`<span class="mq na">Quadratura non disponibile</span>`}</div>
@@ -1726,19 +1750,26 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
   :`<div class="banner sond-b">Tutti i movimenti di ${MESE_L(ym).toLowerCase()} sono classificati.${rivAll?` Ne restano ${rivAll} da rivedere in altri mesi.`:""}</div>`}
  <div class="grid">
   <div class="box"><h3>Entrate e uscite <small>${MESE_L(ym).toLowerCase()}</small></h3><div class="tbl-wrap flat"><table class="mvtab"><tbody>
-   <tr class="grp"><td colspan="2">Entrate · ${fmt(te)}</td></tr>${E.map(([c,l])=>tr(c,l)).join("")}
-   <tr class="grp"><td colspan="2">Uscite · ${fmt(-tu)} lorde${N.R?` · ${fmt(-tn)} nette`:""}</td></tr>${U.map(([c,l])=>tu_(c,l)).join("")}
-   ${N.R?`<tr class="mvrimb"><td>${svDotC(MOV_COL.rimb)}Rimborsi spese condivise<small>${N.G>0?"ripartiti su "+N.cond.filter(c=>N.alloc[c]>0).map(movLbl).join(", ").toLowerCase()+" in proporzione alla spesa: già sottratti nelle righe sopra (stima)":"non ripartiti: scegli sotto le categorie che dividete"}</small></td><td class="${N.G>0?"muted":"nt-ent"}">${N.G>0?"("+fmt(N.R,"sign")+")":fmt(N.R,"sign")}</td></tr>`:""}
+   <tr class="grp"><td colspan="2">Entrate · ${fmt(te)}</td></tr>${tr("stipendio","Stipendio")}
+   <tr><td>${svDotC(MOV_COL.sondaggi)}Sondaggi<small>dall'app Guadagni (fa fede)${N.sv.tot?": "+SOND_CAN.filter(([k])=>N.sv[k]).map(([k,l])=>l+" "+fmt(N.sv[k])).join(" · "):""}</small></td><td class="${N.sv.tot?"nt-ent":""}">${N.sv.tot?fmt(N.sv.tot,"sign"):"—"}</td></tr>${tr("extra","Entrate extra")}${N.ppx?`<tr><td>${svDotC(MOV_COL.extra)}Entrate extra via PayPal<small>arrivato da PayPal oltre ai sondaggi attesi (riquadro «Sondaggi e PayPal»)</small></td><td class="nt-ent">${fmt(N.ppx,"sign")}</td></tr>`:""}
+   <tr class="grp"><td colspan="2">Uscite · ${fmt(-tu)} lorde${N.R?` · ${fmt(-tn)} nette`:""}</td></tr>${U.map(([c,l])=>tu_(c,l)).join("")}${N.amz?`<tr><td>${svDotC(MOV_COL.amz)}Acquisti con buoni Amazon<small>pari ai buoni dei sondaggi: entrata e uscita si compensano</small></td><td class="nt-spese">${fmt(-N.amz,"sign")}</td></tr>`:""}
+   ${N.R?`<tr class="mvrimb"><td>${svDotC(MOV_COL.rimb)}Rimborsi spese condivise<small>${N.aff?"quota affitto "+fmt(N.aff)+" a casa e utenze, ":""}${N.R-N.aff-N.nonRip>0.005?"il resto diviso in parti uguali tra "+N.cond.filter(c=>N.alloc[c]-(c==="casa"?N.aff:0)>0.005).map(movLbl).join(", ").toLowerCase()+": ":""}${N.nonRip>0.005?fmt(N.nonRip)+" non ripartiti (scegli sotto le categorie che dividete): ":""}già sottratti nelle righe sopra</small></td><td class="${N.nonRip>0.005?"nt-ent":"muted"}">${N.nonRip>0.005?fmt(N.nonRip,"sign"):"("+fmt(N.R,"sign")+")"}</td></tr>`:""}
+   <tr class="grp"><td colspan="2">Passaggi (già contati nelle entrate)</td></tr>${P.map(([c,l])=>tr(c,l)).join("")}
    <tr class="grp"><td colspan="2">Escluse dal bilancio</td></tr>${X.map(([c,l])=>tr(c,l)).join("")}
    ${o[""]?`<tr><td>Da classificare</td><td>${fmt(o[""],"sign")}</td></tr>`:""}
-   </tbody><tfoot><tr><td>Entrate − uscite nette</td><td class="${te+tn<0?"neg":"pos"}">${fmt(te+tn,"sign")}</td></tr></tfoot></table></div>
-   <p class="note">Giroconti, investimenti e movimenti esclusi non sono né entrate né uscite.</p></div>
+   </tbody><tfoot><tr><td>Entrate − uscite nette</td><td class="${te+tn<0?"neg":"pos"}">${fmt(te+tn,"sign")}</td></tr>${Math.abs(N.nonArr)>0.005?`<tr class="mvdiff"><td>di cui non (ancora) sui conti<small>${N.nonArr>0?"sondaggi prelevati non ancora arrivati sui conti (rimasti su PayPal o in viaggio)":"arrivati sui conti sondaggi prelevati nei mesi precedenti"}</small></td><td>${fmt(N.nonArr,"sign")}</td></tr>`:""}</tfoot></table></div>
+   <p class="note">Le entrate da sondaggi sono quelle dell'app Guadagni; gli accrediti dai portali e da PayPal sono solo passaggi. Giroconti, investimenti e movimenti esclusi non sono né entrate né uscite.</p></div>
   <div class="mvside">
   <div class="box"><h3>Per conto</h3><dl class="kv">${["Fineco","Revolut","Revolut deposito"].map(c=>{const s=mv.filter(m=>m.conto===c);return s.length?kv(c+` <small>${s.length} movimenti</small>`,fmt(sum(s.map(m=>m.importo)),"sign")):"";}).join("")}</dl>
    <p class="note">File letti: ${(d.file||[]).length}${(d.errori||[]).length?` · <span class="neg">${d.errori.length} illeggibili: ${d.errori.map(e=>esc(e.file)).join(", ")}</span>`:""}. Ultima lettura sul PC: ${d.aggiornato?fmtWhen(Date.parse(d.aggiornato)):"—"}.</p>
    <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
   <div class="box"><h3>Spese che dividete</h3><div class="mvcond">${MOV_COND_OK.map(c=>`<label><input type="checkbox" class="mv-cond" value="${c}" ${(S.movCond||[]).includes(c)?"checked":""} ${READONLY?"disabled":""}> ${movLbl(c)}</label>`).join("")}</div>
-   <p class="note">I rimborsi del mese si ripartiscono sulle categorie spuntate, in proporzione a quanto hai speso in ciascuna: le cifre con ≈ sono la tua quota stimata. Il totale delle uscite nette è esatto; la ripartizione per categoria è una stima, più precisa sulla media di più mesi.</p></div>
+   <p class="note">Dai rimborsi del mese si toglie prima la quota d'affitto (${affQuota(ym)?fmt(affQuota(ym)):"spesa fissa mensile «Affitto»"}), che va tutta a «Casa e utenze»; il resto si divide in parti uguali tra le categorie spuntate, senza superare quanto hai speso in ciascuna. Le cifre con ≈ sono stime; il totale delle uscite nette è esatto.</p></div>
+  <div class="box"><h3>Sondaggi e PayPal <small>${MESE_L(ym).toLowerCase()}</small></h3>${(()=>{const sv=N.sv,Lp=L.filter(m=>m<=ym);
+   const pa=N.pa;
+   return `<dl class="kv">${kv("Prelevati nell'app Guadagni",fmt(sv.tot)+(sv.amazon?` <small>di cui buoni Amazon ${fmt(sv.amazon)}</small>`:""))}${kv("Prelievi non Amazon <small>banca + PayPal</small>",fmt(sv.banca+sv.paypal))}${kv("− arrivati in banca dai portali",fmt(-(o.sondaggi||0),"sign"))}${pa.prima?kv("+ ancora atteso dal mese prima",fmt(pa.prima,"sign")):""}${kv("= Atteso da PayPal",fmt(pa.att))}${kv("Arrivato da PayPal",fmt(pa.arr))}${kv("Entrate extra via PayPal <small>arrivato oltre l'atteso</small>",`<span class="${pa.extra?"nt-ent":""}">${fmt(pa.extra)}</span>`)}${kv("Ancora da arrivare <small>passa al mese dopo</small>",fmt(pa.res))}</dl>
+   ${sv.senza.length?`<p class="note neg">Canale non indicato per ${sv.senza.map(esc).join(", ")}: contati come banca. Indicalo qui sotto.</p>`:""}
+   <details class="mvhelp" ${sv.senza.length?"open":""}><summary>Come paga ogni portale</summary><div class="mvcan">${SV.sites.map(x=>`<label><span>${esc(x.name)}</span><select class="in sel mv-canale" data-site="${esc(x.id)}" ${READONLY?"disabled":""}>${(S.sondCanali||{})[x.id]?"":`<option value="" selected>da indicare (ora: banca)</option>`}${SOND_CAN.map(([k,l])=>`<option value="${k}" ${(S.sondCanali||{})[x.id]===k?"selected":""}>${l}</option>`).join("")}</select></label>`).join("")}</div></details>`;})()}</div>
  </div></div>
  <details class="more" ${MOV_ALL?"open":""} id="mov-all"><summary>Tutti i movimenti di ${MESE_L(ym).toLowerCase()} (${mv.length})</summary><p class="note">Cambia la categoria dal menu. «sempre» spuntato = la controparte ha una regola e i suoi movimenti (passati, del mese e futuri) si classificano da soli, tranne quelli che hai impostato a mano: spuntalo per crearla, toglilo per eliminarla. Se cambi la categoria di un movimento con regola ti chiede se cambiare la regola o solo quel movimento.</p>
   <div class="mvf"><input class="in" type="search" id="mov-q" placeholder="Cerca (es. Coop, Rachele…)" value="${esc(MOV_Q)}" aria-label="Cerca nei movimenti"><select class="in sel" id="mov-fc" aria-label="Filtra per categoria"><option value="*">Tutte le categorie</option>${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===MOV_FC?"selected":""}>${l}</option>`).join("")}<option value="" ${MOV_FC===""?"selected":""}>Da classificare</option></select><span class="mvn" id="mov-n"></span></div>
@@ -1764,6 +1795,7 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']")
 view.addEventListener("change",e=>{const t=e.target;
  if(t.id==="mov-sel"){MOV_M=t.value;render();return;}
  if(t.id==="mov-fc"){MOV_FC=t.value;movFiltra();return;}
+ if(t.classList&&t.classList.contains("mv-canale")){if(READONLY)return;if(!t.value)return;S.sondCanali=Object.assign({},S.sondCanali,{[t.dataset.site]:t.value});scheduleSave();render();return;}
  if(t.classList&&t.classList.contains("mv-cond")){if(READONLY)return;S.movCond=[...document.querySelectorAll(".mv-cond")].filter(x=>x.checked).map(x=>x.value);scheduleSave();render();return;}
  if(t.classList&&(t.classList.contains("mv-cat")||t.classList.contains("mv-ric"))){const id=t.dataset.id,P=MOV_PEND[id]=MOV_PEND[id]||{};
   if(t.classList.contains("mv-cat"))P.cat=t.value;else P.ric=t.checked;return;}
