@@ -766,3 +766,21 @@ table.mvtab tfoot tr.mvdiff td{font-weight:400;font-size:12.5px;color:var(--mute
 .mvpie-in{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
 @media (max-width:560px){.mvpie-in{grid-template-columns:1fr;justify-items:center}.mvpie-in .pleg{width:100%}}
 .mv-sh{margin-top:28px;padding-top:18px;border-top:2px solid var(--line)}
+/* resoconto v31: colonne entrate vs uscite + investito */
+.mcol{display:flex;gap:22px;align-items:stretch;justify-content:center;min-width:0}
+.mc-c{display:flex;flex-direction:column;align-items:center;gap:6px;width:92px}
+.mc-c > span{font-size:11.5px;color:var(--muted);text-align:center;line-height:1.2;min-height:2.4em}
+.mc-b{flex:1;width:100%;display:flex;flex-direction:column-reverse;border-bottom:1.5px solid var(--line)}
+.mc-b i{display:flex;align-items:center;justify-content:center;width:100%;min-height:0}
+.mc-b i:first-child{border-radius:0}.mc-b i:last-child{border-radius:6px 6px 0 0}
+.mc-b b{font:600 11px/1 var(--f-mono);color:var(--fg);background:color-mix(in srgb,var(--surface) 80%,transparent);padding:2px 4px;border-radius:4px;white-space:nowrap}
+.mc-ent{background:var(--c-ent)}.mc-usc{background:var(--c-spese)}.mc-inv{background:var(--c-inv)}
+.mc-gain{background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--c-risp) 55%,transparent) 0 4px,transparent 4px 8px);outline:1.5px dashed var(--c-risp);outline-offset:-1.5px}
+.mc-loss{background:repeating-linear-gradient(45deg,var(--neg) 0 3px,var(--neg-soft) 3px 6px)}
+.mcol-in{display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;align-items:center}
+@media (max-width:560px){.mcol-in{grid-template-columns:1fr}.mcol-in .pleg{width:100%}}
+.psub .mcol{gap:10px}.psub .mc-c{width:56px}.psub .mc-c > span{font-size:10px}.psub .mc-b b{font-size:9.5px}
+.mvpies{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.mvgrid{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
+.psub-in>.mcol{flex:none;display:flex;align-self:center}
+.mvpies .mvpie-in{grid-template-columns:1fr;justify-items:center}.mvpies .mvpie-in .pleg{width:100%}
