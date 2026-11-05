@@ -74,7 +74,7 @@ function sanitize(s){
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
   o.vincolato={fineco:(Array.isArray(s.vincolato&&s.vincolato.fineco)?s.vincolato.fineco:[]).filter(r=>r&&/^\d{4}-\d{2}$/.test(r.da||"")&&num(r.importo)!=null&&r.importo>=0).map(r=>({da:r.da,importo:r.importo})).sort((a,b)=>a.da.localeCompare(b.da))};o.patEstr=(Array.isArray(s.patEstr)?s.patEstr:[]).filter(x=>/^\d{4}-\d{2}$/.test(x)).slice(-240);
   o.sondCanali={};if(s.sondCanali&&typeof s.sondCanali==="object")Object.entries(s.sondCanali).forEach(([k,v])=>{if(/^[a-z0-9_-]{1,48}$/.test(k)&&["banca","paypal","amazon"].includes(v))o.sondCanali[k]=v;});
-  o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","vita","straord"].includes(k)):["spesa","svago"];
+  o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","carburante","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
     mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
     freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),da:/^\d{4}-\d{2}$/.test(t.da)?t.da:""}));
@@ -1681,12 +1681,12 @@ V.home=()=>{const L=S.cart?S.cart.lista:[],x=L[L.length-1];svLoad();
    I movimenti NON entrano in S né nei backup: copia locale in localStorage «gestionale-movimenti» per l'uso offline. */
 const MOV_KEY="gestionale-movimenti";
 const MOV_CAT=[["stipendio","Stipendio","e"],["extra","Entrate extra","e"],
- ["casa","Casa e utenze","u"],["spesa","Spesa","u"],["svago","Ristoranti e svago","u"],["viaggi","Viaggi","u"],["vita","Altre spese quotidiane","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],
+ ["casa","Casa e utenze","u"],["spesa","Spesa","u"],["svago","Ristoranti e svago","u"],["viaggi","Viaggi","u"],["carburante","Carburante","u"],["vita","Altre spese quotidiane","u"],["straord","Spese straordinarie","u"],["tasse","Tasse","u"],
  ["rimb","Rimborsi spese condivise","r"],
  ["sondaggi","Sondaggi arrivati in banca","p"],["paypal","Da PayPal (passaggio)","p"],
  ["invest","Investimenti","x"],["giro","Giroconto (tra i tuoi conti)","x"],["escl","Escluso dai conteggi","x"]];
-const MOV_COL={stipendio:"c-ent",sondaggi:"c-ent",paypal:"c-fin",amz:"c-liq",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
-const MOV_COND_OK=["casa","spesa","svago","viaggi","vita","straord"];
+const MOV_COL={carburante:"c-carb",stipendio:"c-ent",sondaggi:"c-ent",paypal:"c-fin",amz:"c-liq",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
+const MOV_COND_OK=["casa","spesa","svago","viaggi","carburante","vita","straord"];
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
 let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false,MOV_Q="",MOV_FC="*";const MOV_PEND={}; // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
@@ -1780,6 +1780,12 @@ V.movimenti=()=>{const d=movLoad(),L=movMesi();
   <details class="mvhelp"><summary>Come scegliere</summary><p class="note">Le uscite di vita quotidiana sopra ${fmt(d.soglia||300)} sono proposte come spese straordinarie. I soldi che ti restituisce chi divide le spese con te vanno in «Rimborsi spese condivise»: non sono entrate, riducono le spese delle categorie che dividete. Spostamenti tra i tuoi conti: «Giroconto». Quello che non vuoi contare: «Escluso dai conteggi».</p></details>
   <div class="mvl">${riv.map(m=>riga(m,true)).join("")}</div><div class="actions"><button class="btn" data-act="mov-okall">✓ Conferma tutte le proposte visibili</button></div></div>`
   :`<div class="banner sond-b">Tutti i movimenti di ${MESE_L(ym).toLowerCase()} sono classificati.${rivAll?` Ne restano ${rivAll} da rivedere in altri mesi.`:""}</div>`}
+ ${(()=>{const mn=MESE_L(ym).toLowerCase();
+  const usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l+(N.alloc[k]?" ≈":""),Math.max(-N.net[k],0),MOV_COL[k]]).concat(N.amz?[["Acquisti con buoni Amazon",N.amz,MOV_COL.amz]]:[]).filter(x=>x[1]>0.005);
+  const ent=[["Stipendio",Math.max(o.stipendio||0,0),"c-ent"],["Sondaggi",N.sv.tot,"c-etf"],["Entrate extra",Math.max(o.extra||0,0),"c-liq"],["Extra via PayPal",N.ppx,"c-rev"]].filter(x=>x[1]>0.005);
+  const tU=sum(usc.map(x=>x[1])),tE=sum(ent.map(x=>x[1]));
+  const card=(t,arr,tot,lab)=>`<div class="box mvpie"><h3>${t} <small>${mn}</small></h3><div class="mvpie-in">${donut(arr,150,18,t+" di "+mn,1,tot,lab)}<ul class="pleg">${arr.map(([l,v,c])=>li(c,l,v,tot)).join("")||`<li><span class="muted">Nessun dato</span></li>`}</ul></div></div>`;
+  return `<div class="grid">${card("Entrate",ent,tE,"entrate")}${card("Uscite",usc,tU,"uscite nette")}</div>`;})()}
  <div class="grid">
   <div class="box"><h3>Entrate e uscite <small>${MESE_L(ym).toLowerCase()}</small></h3><div class="tbl-wrap flat"><table class="mvtab"><tbody>
    <tr class="grp"><td colspan="2">Entrate · ${fmt(te)}</td></tr>${tr("stipendio","Stipendio")}

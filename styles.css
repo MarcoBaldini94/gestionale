@@ -26,6 +26,7 @@ img{max-width:100%}
   --input-line:#b7d3e3;
   --inv-t:var(--inv); --fondo-t:var(--fondo);
   --aff:#a33c6b; --aff-t:#93305d; --c-aff:var(--aff); --t-aff:var(--aff-t);
+  --carb:#7a6a12; --carb-t:#6b5d0f; --c-carb:var(--carb); --t-carb:var(--carb-t);
   --c-liq:var(--liq);--c-fin:var(--fin);--c-rev:var(--rev);--c-inv:var(--inv);--c-fondo:var(--fondo);--c-etf:var(--etf);--c-spese:var(--spese);--c-tasse:var(--tasse);--c-risp:var(--risp);--c-ent:var(--ent);--c-fisse:var(--fisse);
   --t-liq:var(--liq-t);--t-fin:var(--liq-t);--t-rev:var(--rev-t);--t-inv:var(--inv);--t-fondo:var(--inv);--t-etf:var(--etf-t);--t-spese:var(--neg);--t-tasse:var(--tax);--t-risp:var(--good);--t-ent:var(--ent-t);--t-fisse:var(--neg);
   --link:var(--accent);
@@ -43,7 +44,7 @@ img{max-width:100%}
   --good-2:#3d6b22; --spese:#e8675a; --neg:#f07d71; --neg-soft:#3a1c1a; --tasse:#eb9a4a; --tax:#f0a75c; --tax-soft:#3a2612;
   --qa:#f2c56a; --qb:#eb9a4a; --imp:#c27a4a; --fisse:#f0a39a; --warn:#e6b04a; --input-bg:#142632; --input-fg:#bfe3f6;
   --input-line:#2e5268;
-  --aff:#e07fa8; --aff-t:#ec9cbd;
+  --aff:#e07fa8; --aff-t:#ec9cbd; --carb:#d9c25a; --carb-t:#e6d27a;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0a1218; --surface:#121c24; --surface-2:#17242e; --fg:#e3ecf1; --muted:#93a6b2; --line:#233441; --band:#072636;
@@ -53,7 +54,7 @@ img{max-width:100%}
   --good-2:#3d6b22; --spese:#e8675a; --neg:#f07d71; --neg-soft:#3a1c1a; --tasse:#eb9a4a; --tax:#f0a75c; --tax-soft:#3a2612;
   --qa:#f2c56a; --qb:#eb9a4a; --imp:#c27a4a; --fisse:#f0a39a; --warn:#e6b04a; --input-bg:#142632; --input-fg:#bfe3f6;
   --input-line:#2e5268;
-  --aff:#e07fa8; --aff-t:#ec9cbd;
+  --aff:#e07fa8; --aff-t:#ec9cbd; --carb:#d9c25a; --carb-t:#e6d27a;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}
 .nt-tasse{color:var(--t-tasse)}.nt-spese{color:var(--t-spese)}.nt-risp{color:var(--t-risp)}.nt-liq{color:var(--t-liq)}.nt-inv{color:var(--t-inv)}.nt-ent{color:var(--t-ent)}
 .pleg li.sitem > span .sd{font-family:var(--f-mono);margin-right:4px;color:var(--muted)}.pleg li.sitem.paid > span{color:var(--muted)}
@@ -762,3 +763,5 @@ table.mvtab tfoot tr.mvdiff td{font-weight:400;font-size:12.5px;color:var(--mute
 .vinc-r b{font-family:var(--f-mono);font-weight:500}
 .vinc-f{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .vinc-f input.in{width:auto;flex:1 1 120px;min-width:0;text-align:left;font-family:var(--f-body)}
+.mvpie-in{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+@media (max-width:560px){.mvpie-in{grid-template-columns:1fr;justify-items:center}.mvpie-in .pleg{width:100%}}
