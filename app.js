@@ -19,7 +19,7 @@ const scadRow=(voce,anno,auto,frazione,scadenza)=>({id:uid(),voce,anno,auto:auto
 const isY=y=>/^\d{4}$/.test(String(y));
 
 function defaults(){const y=new Date().getFullYear();return{v:3,anni:{[y]:{...DEF_ANNO}},globali:{...DEF_GLOB},registro:[],patrimonio:{[y]:blankPat()},
-  chiusure:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{}};}
+  chiusure:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[]};}
 
 /* conversione dal formato del foglio (v1/v2): mesi → registro movimenti, parametri → tabella per anno */
 function migrate(o){
@@ -72,6 +72,7 @@ function sanitize(s){
   o.prev={entrate:num(s.prev&&s.prev.entrate),spese:num(s.prev&&s.prev.spese),inv:num(s.prev&&s.prev.inv)};
   o.gen=(Array.isArray(s.gen)?s.gen:[]).filter(x=>typeof x==="string");
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
+  o.vincolato={fineco:(Array.isArray(s.vincolato&&s.vincolato.fineco)?s.vincolato.fineco:[]).filter(r=>r&&/^\d{4}-\d{2}$/.test(r.da||"")&&num(r.importo)!=null&&r.importo>=0).map(r=>({da:r.da,importo:r.importo})).sort((a,b)=>a.da.localeCompare(b.da))};o.patEstr=(Array.isArray(s.patEstr)?s.patEstr:[]).filter(x=>/^\d{4}-\d{2}$/.test(x)).slice(-240);
   o.sondCanali={};if(s.sondCanali&&typeof s.sondCanali==="object")Object.entries(s.sondCanali).forEach(([k,v])=>{if(/^[a-z0-9_-]{1,48}$/.test(k)&&["banca","paypal","amazon"].includes(v))o.sondCanali[k]=v;});
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
@@ -503,8 +504,13 @@ V.patrimonio=()=>{
  const cy=[...new Set([...yearsOf(S.chiusure),Y-1])].sort((a,b)=>a-b);
  const tabs=[["liq","Liquidità"],["inv","Investimenti"],["rie","Riepilogo"]];
  const body={
-  liq:()=>`<div class="box"><h3>Saldi dei conti mese per mese</h3><p class="note">Saldo all'ultimo giorno del mese.</p>
-   ${tbl(["Fineco","Revolut","Totale","Variazione"],i=>[inp(B(i)+".fineco"),inp(B(i)+".revolut"),out(`${o}.D.${i}`,"eur","b zd"),out(`${o}.E.${i}`,"sign","zd")])}</div>
+  liq:()=>`<div class="box"><h3>Saldi dei conti mese per mese</h3><p class="note">Saldo all'ultimo giorno del mese. Dai mesi con estratto conto i saldi si riempiono da soli («estratto»): Revolut = conto + deposito; Fineco = conto + conto deposito vincolato qui sotto.</p>
+   <details class="more" ${(S.vincolato.fineco||[]).length?"":"open"}><summary>Conto deposito vincolato Fineco${(S.vincolato.fineco||[]).length?" · ora "+fmt(vincAt("9999-12")):""}</summary>
+    <p class="note">Non compare nell'estratto: va sommato al conto. Indica l'importo e da quale mese vale; se cambia (rinnovo con importo diverso, scadenza senza rinnovo = 0) aggiungi una variazione: i mesi precedenti non cambiano.</p>
+    <div class="vinc">${(S.vincolato.fineco||[]).map((r,i)=>`<div class="vinc-r"><span>dal ${MESE_L(r.da).toLowerCase()}</span><b>${fmt(r.importo)}</b><button class="icon-btn" data-act="vinc-del" data-vi="${i}" aria-label="Togli" ${READONLY?"disabled":""}>×</button></div>`).join("")}
+    ${READONLY?"":`<div class="vinc-f"><input class="in" type="month" id="vinc-da" value="${(S.patEstr||[])[0]||new Date().toLocaleDateString("sv-SE").slice(0,7)}" aria-label="Dal mese"><input class="in" id="vinc-v" inputmode="decimal" placeholder="Importo €" aria-label="Importo"><button class="btn sm" data-act="vinc-add">Aggiungi</button></div>`}</div></details>
+   ${!(S.vincolato.fineco||[]).length&&(S.patEstr||[]).length?`<p class="note neg">Indica il vincolato (anche 0) per far riempire Fineco dagli estratti.</p>`:""}
+   ${tbl(["Fineco","Revolut","Totale","Variazione"],i=>[estCell(Y,i,"fineco",B(i)+".fineco"),estCell(Y,i,"revolut",B(i)+".revolut"),out(`${o}.D.${i}`,"eur","b zd"),out(`${o}.E.${i}`,"sign","zd")])}</div>
   <div class="box c-good"><h3>Valori di fine anno</h3><dl class="kv">
    ${cy.map(y=>kv(`Fine ${y}`+(R.chiusure[y]&&R.chiusure[y].d!=null?` <small class="${R.chiusure[y].d>=0?"pos":"neg"}">${fmt(R.chiusure[y].d,"sign")} sull'anno prima</small>`:""),inp(`chiusure.${y}`))).join("")}</dl>
    <p class="note">Servono come punto di partenza per la variazione annuale. Se lasci vuoto il valore di fine anno precedente, viene usato il liquido di dicembre della tabella di quell'anno.</p></div>`,
@@ -990,6 +996,13 @@ view.addEventListener("input",e=>{
  if(k==="int"&&v!=null)v=Math.round(v);
  setP(S,el.dataset.i,v);updateOutputs();scheduleSave();
 });
+view.addEventListener("click",e=>{const b=e.target.closest("[data-act='vinc-add'],[data-act='vinc-del']");if(!b||READONLY)return;e.preventDefault();
+ const L=S.vincolato.fineco=S.vincolato.fineco||[];
+ if(b.dataset.act==="vinc-del")L.splice(+b.dataset.vi,1);
+ else{const da=(document.getElementById("vinc-da")||{}).value||"",p=parseIt((document.getElementById("vinc-v")||{}).value||"");
+  if(!/^\d{4}-\d{2}$/.test(da)||!p.ok||p.v==null||p.v<0){const f=document.getElementById(/^\d{4}-\d{2}$/.test(da)?"vinc-v":"vinc-da");if(f)f.focus();return;}
+  const j=L.findIndex(r=>r.da===da);if(j>=0)L[j].importo=p.v;else L.push({da,importo:p.v});L.sort((a,c)=>a.da.localeCompare(c.da));}
+ applyEstrSaldi();scheduleSave();render();});
 view.addEventListener("focusout",e=>{const el=e.target;if(el.dataset&&el.dataset.k==="cell"&&!el.classList.contains("bad")){const e2=cellEntries(+el.dataset.y,+el.dataset.m,el.dataset.f);el.value=e2.length?showIn(sum(e2.map(i=>S.registro[i].importo)),"num"):"";}if(el.dataset&&el.dataset.i&&["num","pct","int","dec"].includes(el.dataset.k)&&!el.classList.contains("bad"))el.value=showIn(getP(S,el.dataset.i),el.dataset.k);});
 view.addEventListener("click",e=>{
  const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act,y=+b.dataset.y;
@@ -1682,7 +1695,7 @@ async function movSync(manual,path,body){
  if(MOV_BUSY||!hubUrl()){if(manual&&!hubUrl())linkMsg("mov","Serve l'indirizzo dell'Hub.");return;}
  MOV_BUSY=true;if(manual)linkMsg("mov","Leggo gli estratti conto dal PC…");
  try{const r=path?await hubFetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}):await hubFetch("/api/estratti/archivio");
-  const prima=JSON.stringify(movLoad()&&movLoad().movimenti||[]);movStore(r);MOV_ERR="";
+  const prima=JSON.stringify(movLoad()&&movLoad().movimenti||[]);movStore(r);MOV_ERR="";if(!READONLY&&applyEstrSaldi()){save();if(current!=="movimenti")afterExternalChange();}
   if(manual)linkMsg("mov",r.movimenti.length+" movimenti letti.");
   if(current==="movimenti"||(current==="dashboard"&&JSON.stringify(r.movimenti)!==prima))afterExternalChange();}
  catch(e){MOV_ERR=e.message;if(manual)linkMsg("mov","Estratti conto non letti: "+e.message+".");if(current==="movimenti")afterExternalChange();}
@@ -1717,6 +1730,25 @@ function ppAuto(ym){const L=movMesi().filter(m=>m<=ym);let res=0,r=null;
  return r||{prima:0,att:0,arr:0,extra:0,res:0};}
 function sondMese(ym){svLoad();const r={banca:0,paypal:0,amazon:0,tot:0,senza:[]};
  SV.sites.forEach(s=>{const v=svGet(ym,s.id,"p")/100;if(!v)return;const c=(S.sondCanali||{})[s.id];r[c||"banca"]+=v;r.tot+=v;if(!c)r.senza.push(s.name);});return r;}
+/* saldi di fine mese dagli estratti conto (v28, decisione di Marco): per ogni mese concluso con estratti, Patrimonio ›
+   Revolut = conto + deposito Revolut, Fineco = conto Fineco + conto deposito vincolato (S.vincolato.fineco, inserito a
+   mano: non compare nell'estratto; finché è vuoto Fineco resta manuale). Un conto senza movimenti nel mese tiene il
+   saldo del mese prima. Celle riempite in sola lettura («estratto»); mesi in S.patEstr. */
+function applyEstrSaldi(){const d=movLoad();if(!d||!Array.isArray(d.quadratura))return false;
+ const cur=new Date().toLocaleDateString("sv-SE").slice(0,7),last={},per={};
+ d.quadratura.slice().sort((a,b)=>a.mese.localeCompare(b.mese)).forEach(q=>{(per[q.mese]=per[q.mese]||{})[q.conto]=q;});
+ const mesi=Object.keys(per).sort(),prima=JSON.stringify([S.patrimonio,S.patEstr]),cov=new Set();
+ mesi.forEach(ym=>{Object.entries(per[ym]).forEach(([c,q])=>{if(q.fine!=null&&!q.parziale)last[c]=q.fine;});
+  if(ym>=cur)return;const [Y,M]=ym.split("-"),m=+M-1;let ok=false;
+  const set=(k,v)=>{if(!S.patrimonio[Y])S.patrimonio[Y]=blankPat();S.patrimonio[Y][m][k]=Math.round(v*100)/100;ok=true;};
+  if(last.Revolut!=null||last["Revolut deposito"]!=null)set("revolut",(last.Revolut||0)+(last["Revolut deposito"]||0));
+  const vv=vincAt(ym);if(last.Fineco!=null&&vv!=null&&!(per[ym].Fineco&&per[ym].Fineco.parziale))set("fineco",last.Fineco+vv);
+  if(ok)cov.add(ym);});
+ S.patEstr=[...new Set([...(S.patEstr||[]),...cov])].sort();
+ return JSON.stringify([S.patrimonio,S.patEstr])!==prima;}
+const vincAt=ym=>{let v=null;((S.vincolato||{}).fineco||[]).forEach(r=>{if(r.da<=ym)v=r.importo;});return v;};
+const estCovers=(Y,m,k)=>(S.patEstr||[]).includes(`${Y}-${String(m+1).padStart(2,"0")}`)&&(k==="revolut"||vincAt(`${Y}-${String(m+1).padStart(2,"0")}`)!=null);
+const estCell=(Y,m,k,path)=>estCovers(Y,m,k)?`<span class="est-c" title="Saldo di fine mese dall'estratto conto">${fmt(getP(S,path))}<span class="nm">estratto</span></span>`:inp(path);
 /* riquadro nella dashboard di Finanze */
 function movPsub(){const d=movLoad();if(!d||!d.movimenti.length)return "";const L=movMesi(),ym=L[L.length-1],N=movNetto(ym),o=N.o,mn=MESE_L(ym).toLowerCase();
  const nr=d.movimenti.filter(m=>m.rivedere).length,usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l,Math.max(-N.net[k],0),MOV_COL[k]]).filter(x=>x[1]>0),tu=sum(usc.map(x=>x[1]));
