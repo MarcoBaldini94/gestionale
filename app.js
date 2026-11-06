@@ -598,10 +598,13 @@ function mchHTML(L,k){
   const inner=`${mini}<b>${m.slice(0,3)} <small>${ym.slice(0,4)}</small></b><em class="${g==null?"":g<0?"neg":"pos"}">${g==null?"—":fmt(Math.round(g),"sign").replace(/,\d\d(?=\s|$)/,"")}</em>`;
   return sel?`<span class="mst-t sel" aria-current="true">${inner}</span>`:`<button class="mst-t" data-act="mm" data-mm="${ym}" aria-label="Vai a ${m.toLowerCase()} ${ym.slice(0,4)}">${inner}</button>`;};
  const q=Q[k];MCH_AT=L[k];
+ /* v38: le barre del mese scelto hanno fondo scala = valore più alto del mese (la barra più lunga arriva in fondo);
+    le miniature restano sulla scala comune per confrontare i mesi */
+ const topM=q?Math.max(1,q.ent,Math.max(q.usc,0)+Math.max(q.inv,0)):1,pm=v=>(Math.max(v,0)/topM*100).toFixed(2)+"%";
  const bars=q?`<div class="mhb">
-  <div class="mhb-r"><div class="mhb-t"><span>Entrate</span><b class="nt-ent">${fmt(q.ent)}</b></div><div class="mhb-bar" title="Entrate: ${fmt(q.ent)}"><i class="mc-ent" style="width:${pc(q.ent)}"></i></div></div>
-  <div class="mhb-r"><div class="mhb-t"><span>Uscite <small>+ investito</small></span><b>${fmt(Math.max(q.usc,0)+Math.max(q.inv,0))}</b></div><div class="mhb-bar"><i class="mc-usc" style="width:${pc(q.usc)}" title="Uscite: ${fmt(q.usc)}"></i><i class="mc-inv" style="width:${pc(q.inv)}" title="Investito: ${fmt(q.inv)}"></i></div></div>
-  <div class="mhb-sc" aria-hidden="true"><span>0</span><span>${fInt(top/2)}</span><span>${fInt(top)} €</span></div></div>`:`<p class="muted">Nessun dato per questo mese.</p>`;
+  <div class="mhb-r"><div class="mhb-t"><span>Entrate</span><b class="nt-ent">${fmt(q.ent)}</b></div><div class="mhb-bar" title="Entrate: ${fmt(q.ent)}"><i class="mc-ent" style="width:${pm(q.ent)}"></i></div></div>
+  <div class="mhb-r"><div class="mhb-t"><span>Uscite <small>+ investito</small></span><b>${fmt(Math.max(q.usc,0)+Math.max(q.inv,0))}</b></div><div class="mhb-bar"><i class="mc-usc" style="width:${pm(q.usc)}" title="Uscite: ${fmt(q.usc)}"></i><i class="mc-inv" style="width:${pm(q.inv)}" title="Investito: ${fmt(q.inv)}"></i></div></div>
+  <div class="mhb-sc" aria-hidden="true"><span>0</span><span>${fInt(topM/2)}</span><span>${fInt(topM)} €</span></div></div>`:`<p class="muted">Nessun dato per questo mese.</p>`;
  return `<div class="mch2 mch-vp" role="group" aria-label="Entrate e uscite: ${MESE_L(L[k])}"><div class="mst">${tile(k-1)}${tile(k)}${tile(k+1)}</div>${bars}</div>`;}
 let MM=null;
 const monthsAvail=()=>Object.keys(R.svAll||{}).sort().flatMap(Y=>R.svAll[Y].ent.map((v,i)=>v!=null?`${Y}-${String(i+1).padStart(2,"0")}`:null).filter(Boolean));
@@ -631,7 +634,7 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
   resAltri=kv("Da accantonare per tasse <small>maturate sulle entrate del mese</small>",`<span class="nt-tasse">${fmt(g("acc")||0)}</span>`)+kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)+kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+(affM>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(affM)}</span>`):"")+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
  const qG=q?kv("Guadagno complessivo <small>guadagno del mese + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`,"strong"):"";
  const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${mchHTML(L,k)}${colLeg(q)}</div>
-  <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} In alto il mese scelto e quelli accanto (toccali o scorri per cambiare mese); le barre usano la stessa scala per tutti i mesi. La differenza tra le due barre è il guadagno (o la perdita) del mese, indicato sotto.</p></div>`:"";
+  <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} In alto il mese scelto e quelli accanto (toccali o scorri per cambiare mese); le barre hanno come fondo scala il valore più alto del mese, le miniature la stessa scala per tutti i mesi. La differenza tra le due barre è il guadagno (o la perdita) del mese, indicato sotto.</p></div>`:"";
  /* v34: confronto entrate registrate (grafico in alto, fonte resoconto) e entrate dai conti (ciambella «Entrate») */
  let entCmp="";if(q&&q.src==="res"&&mp.entC){const reg={};S.registro.filter(r=>r.data.startsWith(MM)&&IN_TOT(r.fonte)).forEach(r=>{const l=FN[r.fonte]||r.fonte;reg[l]=(reg[l]||0)+(+r.importo||0);});
   const d=q.ent-mp.entC.tot,row=(l,v)=>`<div class="ecr"><span>${l}</span><b>${fmt(v)}</b></div>`;
