@@ -575,7 +575,7 @@ const colChart=(q,h)=>{const inv=Math.max(q.inv,0),top=Math.max(q.ent,q.usc+inv,
  return `<div class="mcol" style="height:${h}px" role="img" aria-label="Entrate ${fmt(q.ent)}; uscite ${fmt(q.usc)}; investito ${fmt(inv)}; ${g>=0?"guadagno":"perdita"} ${fmt(Math.abs(g))}">
   <div class="mc-c"><div class="mc-b">${seg("mc-ent",q.ent,"Entrate")}${g<0?seg("mc-loss",-g,"Perdita del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Entrate</span></div>
   <div class="mc-c"><div class="mc-b">${seg("mc-usc",q.usc,"Uscite")}${seg("mc-inv",inv,"Investito")}${g>0?seg("mc-gain",g,"Guadagno del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Uscite + investito</span></div></div>`;};
-const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}${g>=0?li("c-risp","Guadagno del mese",g,q.ent).replace("background:var(--c-risp)","background:color-mix(in srgb,var(--c-risp) 32%,transparent);box-shadow:inset 0 2px 0 var(--c-risp)"):li("neg","Perdita del mese",-g,q.ent).replace("background:var(--neg)","background:repeating-linear-gradient(45deg,var(--neg) 0 3px,var(--neg-soft) 3px 6px)")}</ul>`;};
+const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}${g>=0?li("c-risp","Guadagno del mese",g,q.ent).replace("background:var(--c-risp)","background:color-mix(in srgb,var(--c-risp) var(--gain-a,32%),transparent);box-shadow:inset 0 2px 0 var(--c-risp)"):li("neg","Perdita del mese",-g,q.ent).replace("background:var(--neg)","background:repeating-linear-gradient(45deg,var(--neg) 0 3px,var(--neg-soft) 3px 6px)")}</ul>`;};
 /* chip della dashboard: unico collegamento al Resoconto mensile */
 function riepPsub(){const L=mesiSum();let q=null;for(let i=L.length-1;i>=0&&!q;i--)q=mesSum(L[i]);if(!q)return "";const mn=MESE_L(q.ym).toLowerCase();
  return `<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${q.ym}" title="Apri il resoconto mensile"><h4>Riepilogo del mese <small>${mn}</small></h4><span hidden data-psum>${fmt(Math.round(q.guad),"sign").replace(/,\d\d(?=\s|$)/,"")}</span>
@@ -1891,9 +1891,9 @@ view.addEventListener("change",e=>{const t=e.target;
 view.addEventListener("toggle",e=>{if(e.target.id==="mov-all")MOV_ALL=e.target.open;if(e.target.id==="mov-reg")MOV_REG=e.target.open;},true);
 
 /* ================= tema chiaro / scuro ================= */
-/* senza scelta segue il sistema; la scelta resta in localStorage «gestionale-tema» (applicata già in index.html prima del CSS) */
+/* predefinito scuro (impostato in index.html); la scelta resta in localStorage «gestionale-tema» (applicata già in index.html prima del CSS) */
 const THEME_KEY="gestionale-tema",themeMQ=window.matchMedia?matchMedia("(prefers-color-scheme: dark)"):null;
-const themeCur=()=>{const t=document.documentElement.getAttribute("data-theme");return t==="dark"||t==="light"?t:(themeMQ&&themeMQ.matches?"dark":"light");};
+const themeCur=()=>{const t=document.documentElement.getAttribute("data-theme");return t==="dark"||t==="light"?t:"dark";};
 function themeUI(){const d=themeCur()==="dark",b=document.getElementById("hdr-theme");
  if(b){const l=d?"Passa al tema chiaro":"Passa al tema scuro";b.title=l;b.setAttribute("aria-label",l);document.getElementById("hdr-theme-i").textContent=d?"☀":"☾";document.getElementById("hdr-theme-t").textContent=d?"Chiaro":"Scuro";}
  const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=d?"#072636":"#0b3a53";}

@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Gestionale</title>
 <meta name="description" content="Lavoro, entrate, patrimonio, tasse e scadenze personali in un'unica app">
-<meta name="theme-color" content="#0b3a53">
+<meta name="theme-color" content="#072636">
 <link rel="manifest" href="app.webmanifest">
 <link rel="icon" href="icons/icon48.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-title" content="Gestionale">
 <link rel="preload" href="fonts/IBMPlexSans-400.woff2" as="font" type="font/woff2" crossorigin>
-<script>try{var t=localStorage.getItem("gestionale-tema");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="styles.css?v=32">
+<script>/* tema scuro predefinito (v33): applicato una volta anche se prima era salvato «chiaro»; poi vale la scelta del pulsante */
+try{var t=localStorage.getItem("gestionale-tema");if(localStorage.getItem("gestionale-tema-def")!=="dark"||(t!=="light"&&t!=="dark")){t="dark";localStorage.setItem("gestionale-tema",t);localStorage.setItem("gestionale-tema-def","dark");}document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","dark");}</script>
+<link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
 <header class="top"><div class="wrap">
@@ -25,7 +26,7 @@
 </div></header>
 <nav class="tabs" aria-label="Fogli"><div class="wrap" id="tabs"></div></nav>
 <main><div class="wrap" id="view"></div></main>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 <script>if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));</script>
 </body>
 </html>
