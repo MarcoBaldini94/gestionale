@@ -809,3 +809,29 @@ button.mch-m{cursor:pointer}button.mch-m:hover{opacity:.7}
 .mvgrid{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
 .psub-in>.mcol{flex:none;display:flex;align-self:center}
 .mvpies .mvpie-in{grid-template-columns:1fr;justify-items:center}.mvpies .mvpie-in .pleg{width:100%}
+/* v34: legenda delle ciambelle Entrate/Uscite del Resoconto cliccabile → movimenti del mese */
+.pleg-k li.lk{cursor:pointer;border-radius:8px;margin:0 -6px;padding:4px 6px;transition:background .15s}
+.pleg-k li.lk:hover,.pleg-k li.lk:focus-visible{background:var(--surface-2);outline:none}
+.pleg-k li.lk:focus-visible{box-shadow:0 0 0 2px var(--accent)}
+.pleg-k li.lk > span::after{content:"▸";display:inline-block;margin-left:6px;color:var(--muted);font-size:11px;transition:transform .15s}
+.pleg-k li.lk[aria-expanded="true"]{background:var(--surface-2)}
+.pleg-k li.lk[aria-expanded="true"] > span::after{transform:rotate(90deg)}
+.pleg-k li.mvleg-p{display:block;margin:-4px -6px 4px;padding:6px 10px 8px;border-left:2px solid var(--line);background:var(--surface-2);border-radius:0 0 8px 8px;font-size:13px}
+.pleg-k li.mvleg-p[hidden]{display:none}
+.pleg-k li.mvleg-p .note{margin:0 0 6px}
+.mvl-mini{display:grid}
+.mvr-m{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:2px 8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
+.mvr-m:last-child{border-bottom:0}
+.mvr-m .mvd{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.mvr-m .mvt{min-width:0}.mvr-m .mvt b{display:block;font-weight:500;font-size:13px;overflow-wrap:anywhere}
+.mvr-m .mvt small{display:block;color:var(--muted);font-size:11.5px;overflow-wrap:anywhere}
+.mvr-m .mvi{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;color:var(--t-spese)}.mvr-m.in .mvi{color:var(--t-ent)}
+.mvl-tot{margin:6px 0 0;font-size:12px;color:var(--muted);text-align:right}.mvl-tot b{font-family:var(--f-mono);color:var(--fg)}
+.mvleg-h{margin:0;text-align:center}
+details.ecmp{border-top:1px solid var(--line);padding-top:10px}
+details.ecmp summary{cursor:pointer;font-size:13px;color:var(--muted)}details.ecmp summary b{font-family:var(--f-mono);color:var(--fg)}details.ecmp summary b.neg{color:var(--neg)}
+.ecmp-in{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:10px 0 6px}
+.ecmp-in h4{margin:0 0 4px;font-size:12px;font-weight:600;color:var(--muted)}.ecmp-in h4 small{display:block;font-weight:400}
+.ecr{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--line)}.ecr b{font-family:var(--f-mono);font-weight:500;white-space:nowrap}
+@media (max-width:480px){.ecmp-in{grid-template-columns:1fr}}
+.pleg-k .mvr-m .mvt b{font-family:var(--f-body)}

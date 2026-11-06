@@ -635,6 +635,12 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
  const qG=q?kv("Guadagno complessivo <small>guadagno del mese + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`,"strong"):"";
  const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${mchHTML(L,k)}${colLeg(q)}</div>
   <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} La fascia verde sopra le uscite è il guadagno del mese rimasto sui conti (in rosso tratteggiato, sopra le entrate, la perdita). Al centro il mese scelto; tocca un mese accanto o scorri per cambiarlo. Stessa scala per tutti i mesi.</p></div>`:"";
+ /* v34: confronto entrate registrate (grafico in alto, fonte resoconto) e entrate dai conti (ciambella «Entrate») */
+ let entCmp="";if(q&&q.src==="res"&&mp.entC){const reg={};S.registro.filter(r=>r.data.startsWith(MM)&&IN_TOT(r.fonte)).forEach(r=>{const l=FN[r.fonte]||r.fonte;reg[l]=(reg[l]||0)+(+r.importo||0);});
+  const d=q.ent-mp.entC.tot,row=(l,v)=>`<div class="ecr"><span>${l}</span><b>${fmt(v)}</b></div>`;
+  entCmp=Math.abs(d)<0.5?"":`<details class="ecmp"><summary>Entrate registrate ${fmt(q.ent)} · dai conti ${fmt(mp.entC.tot)} · differenza <b class="${d<0?"neg":""}">${fmt(d,"sign")}</b></summary>
+  <div class="ecmp-in"><div><h4>Registrate <small>scheda Entrate · grafico in alto</small></h4>${Object.entries(reg).map(([l,v])=>row(l,v)).join("")}</div><div><h4>Dai conti <small>ciambella «Entrate»</small></h4>${mp.entC.voci.map(x=>row(x[0],x[1])).join("")}</div></div>
+  <p class="note">Il grafico in alto usa le entrate registrate (stipendio = netto del cedolino nel mese di pagamento, sondaggi = prelievi dell'app, libera professione al lordo, altro inserito a mano) perché il guadagno del mese viene dai saldi di Patrimonio. La ciambella usa gli accrediti degli estratti conto: le entrate «extra» e quelle via PayPal non registrate, o uno stipendio accreditato in un giorno diverso da quello del cedolino, fanno la differenza.</p></details>`;}
  const pies=[resPie,...(mp.pies||[])].filter(Boolean);
  const altri=qG+resAltri+(mp.altri||"")+(q&&q.src==="res"&&mp.netto?mp.netto:"");
  return `<section class="sheet">
@@ -643,7 +649,7 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
  ${negB}
  ${top}
  ${pies.length?`<div class="grid mvpies">${pies.join("")}</div>`:""}
- ${altri?`<div class="box"><h3>Altri dati del mese</h3><dl class="kv">${altri}</dl>${hasR?`<p class="note">Spese «di vita» del resoconto = entrate − risparmio − tasse − spese fisse: un'entrata non registrata o un rimborso le fanno sembrare più basse.</p>`:""}</div>`:""}
+ ${altri?`<div class="box"><h3>Altri dati del mese</h3><dl class="kv">${altri}</dl>${entCmp}${hasR?`<p class="note">Spese «di vita» del resoconto = entrate − risparmio − tasse − spese fisse: un'entrata non registrata o un rimborso le fanno sembrare più basse.</p>`:""}</div>`:""}
  <div class="sheet-h mv-sh"><h2>Dai conti</h2><p>Movimenti degli estratti conto Fineco e Revolut letti dal PC fisso: restano su questo dispositivo e non entrano nei backup.</p></div>
  ${mb}
 </section>`;};
@@ -1010,6 +1016,7 @@ view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("
 view.addEventListener("change",e=>{const t=e.target;if(!t.classList||!t.classList.contains("ric-da")||READONLY)return;
  const r=S.ricorrenti[+t.dataset.idx];if(!r||!/^\d{4}-\d{2}$/.test(t.value)){render();return;}
  r.da=t.value;r.esclusi=r.esclusi.filter(x=>typeof x!=="string"||x>=r.da);ensureRic(S);render();scheduleSave();});
+view.addEventListener("keydown",e=>{const t=e.target;if(t.classList&&t.classList.contains("lk")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click();}});
 /* scorrimento laterale sul grafico del resoconto = mese prima/dopo */
 let MCH_X=null;
 view.addEventListener("touchstart",e=>{MCH_X=e.target.closest(".mch-vp")?[e.touches[0].clientX,e.touches[0].clientY]:null;},{passive:true});
@@ -1058,6 +1065,7 @@ view.addEventListener("click",e=>{
  if(a==="year"){UY=y;render();return;}
  if(a==="svv"){SVV=b.dataset.v;render();const t=document.getElementById("svt-det");if(t)t.scrollIntoView({block:"nearest"});return;}
  if(a==="mm"){if(b.dataset.mm){MM=b.dataset.mm;render();}return;}
+ if(a==="mvleg"){const k=b.dataset.k,pn=b.parentElement.querySelector(`[data-p="${k}"]`),op=!MOV_LEG.has(k);op?MOV_LEG.add(k):MOV_LEG.delete(k);b.setAttribute("aria-expanded",op);if(pn)pn.hidden=!op;return;}
  if(a==="sy"){SY=b.dataset.g;EDIT=null;render();return;}
  if(a==="pt"){PT=b.dataset.v;render();return;}
  if(a==="tpy"){TPY=b.dataset.y;render();return;}
@@ -1734,7 +1742,7 @@ const MOV_CAT=[["stipendio","Stipendio","e"],["extra","Entrate extra","e"],
 const MOV_COL={carburante:"c-carb",stipendio:"c-ent",sondaggi:"c-ent",paypal:"c-fin",amz:"c-liq",extra:"c-liq",casa:"c-aff",spesa:"c-risp",svago:"c-etf",viaggi:"c-rev",vita:"c-spese",straord:"c-fisse",tasse:"c-tasse",rimb:"c-ent",invest:"c-inv",giro:"c-fin",escl:"muted"};
 const MOV_COND_OK=["casa","spesa","svago","viaggi","carburante","vita","straord"];
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
-let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false,MOV_Q="",MOV_FC="*";const MOV_PEND={}; // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
+let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false,MOV_Q="",MOV_FC="*";const MOV_PEND={},MOV_LEG=new Set(); // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
 function movStore(d){MOV=d;try{lsSet(MOV_KEY,JSON.stringify(d));}catch(e){}}
 async function movSync(manual,path,body){
@@ -1816,11 +1824,20 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
   ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(pend(m).cat!=null?pend(m).cat:(m.proposta||m.cat))}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${(pend(m).ric!=null?pend(m).ric:m.proposta!=="straord")?"checked":""}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
    :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Spuntato: questa controparte ha una regola e i suoi movimenti si classificano da soli"><input type="checkbox" class="mv-ric2" data-id="${m.id}" ${regK.has(m.chiave)?"checked":""}> sempre${regK.has(m.chiave)&&m.orig==="scelta"?" <small>(eccezione)</small>":""}</label></span>`}</div>`;
  {const mn=MESE_L(ym).toLowerCase();
-  const usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l+(N.alloc[k]?" ≈":""),Math.max(-N.net[k],0),MOV_COL[k]]).concat(N.amz?[["Acquisti con buoni Amazon",N.amz,MOV_COL.amz]]:[]).filter(x=>x[1]>0.005);
-  const ent=[["Stipendio",Math.max(o.stipendio||0,0),"c-ent"],["Sondaggi",N.sv.tot,"c-etf"],["Entrate extra",Math.max(o.extra||0,0),"c-liq"],["Extra via PayPal",N.ppx,"c-rev"]].filter(x=>x[1]>0.005);
+  const usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l+(N.alloc[k]?" ≈":""),Math.max(-N.net[k],0),MOV_COL[k],k]).concat(N.amz?[["Acquisti con buoni Amazon",N.amz,MOV_COL.amz,"amz"]]:[]).filter(x=>x[1]>0.005);
+  const ent=[["Stipendio",Math.max(o.stipendio||0,0),"c-ent","stipendio"],["Sondaggi",N.sv.tot,"c-etf","sond"],["Entrate extra",Math.max(o.extra||0,0),"c-liq","extra"],["Extra via PayPal",N.ppx,"c-rev","ppx"]].filter(x=>x[1]>0.005);
   const tU=sum(usc.map(x=>x[1])),tE=sum(ent.map(x=>x[1]));
-  const card=(t,arr,tot,lab)=>`<div class="box mvpie"><h3>${t} <small>${mn}</small></h3><div class="mvpie-in">${donut(arr,150,18,t+" di "+mn,1,tot,lab)}<ul class="pleg">${arr.map(([l,v,c])=>li(c,l,v,tot)).join("")||`<li><span class="muted">Nessun dato</span></li>`}</ul></div></div>`;
-  parts.pies=[card("Entrate",ent,tE,"entrate"),card("Uscite",usc,tU,"uscite nette")];}
+  /* v34: tocco su una voce della legenda = elenco dei movimenti del mese in quella categoria (pannello sotto la voce) */
+  const legList=(key,box)=>{const byC=c=>mv.filter(m=>(m.cat||"")===c);let L=[],nota="";
+   if(key==="sond"){L=[...byC("sondaggi"),...byC("paypal")];nota=`Il valore viene dall'app Guadagni: prelievi del mese ${fmt(N.sv.tot)} (banca ${fmt(N.sv.banca)}, PayPal ${fmt(N.sv.paypal)}, buoni Amazon ${fmt(N.sv.amazon)}). Sotto, gli accrediti arrivati sui conti da portali e PayPal (passaggi, non contati due volte).`;}
+   else if(key==="ppx"){L=byC("paypal");nota=`Arrivato da PayPal oltre l'atteso dai sondaggi: ${fmt(N.ppx)}. Dettaglio del calcolo in «Sondaggi e PayPal».`;}
+   else if(key==="amz"){nota=`Buoni Amazon prelevati nell'app Guadagni (${fmt(N.amz)}): non passano dai conti.`;}
+   else{L=byC(key);if(box==="u"&&N.alloc[key])nota=`Spesa lorda ${fmt(-o[key])} − rimborsi ≈ ${fmt(N.alloc[key])} = ≈ ${fmt(-N.net[key])}.`;}
+   L.sort((a,b)=>a.data.localeCompare(b.data));
+   return `${nota?`<p class="note">${nota}</p>`:""}${L.length?`<div class="mvl-mini">${L.map(m=>`<div class="mvr-m${m.importo>0?" in":""}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)}${m.dett&&m.dett!==m.descr?" · "+esc(m.dett):""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span></div>`).join("")}</div><p class="mvl-tot">${L.length} ${L.length===1?"movimento":"movimenti"} · totale <b>${fmt(sum(L.map(m=>m.importo)),"sign")}</b></p>`:key==="amz"?"":`<p class="muted">Nessun movimento sui conti in questa categoria.</p>`}`;};
+  const legLi=(box,tot)=>([l,v,c,key])=>li(c,l,v,tot).replace("<li>",`<li class="lk" data-act="mvleg" data-k="${box}-${key}" role="button" tabindex="0" aria-expanded="${MOV_LEG.has(box+"-"+key)}" title="Mostra i movimenti">`)+`<li class="mvleg-p" data-p="${box}-${key}" ${MOV_LEG.has(box+"-"+key)?"":"hidden"}>${legList(key,box)}</li>`;
+  const card=(t,arr,tot,lab,box)=>`<div class="box mvpie"><h3>${t} <small>${mn}</small></h3><div class="mvpie-in">${donut(arr.map(x=>x.slice(0,3)),150,18,t+" di "+mn,1,tot,lab)}<ul class="pleg pleg-k">${arr.map(legLi(box,tot)).join("")||`<li><span class="muted">Nessun dato</span></li>`}</ul></div><p class="note mvleg-h">Tocca una voce per vedere i movimenti.</p></div>`;
+  parts.pies=[card("Entrate",ent,tE,"entrate","e"),card("Uscite",usc,tU,"uscite nette","u")];parts.entC={tot:tE,voci:ent};}
  {const r=[];const v=(l,x,cl)=>Math.abs(x)>0.005?r.push(kv(l,`<span class="${cl||""}">${fmt(x,"sign")}</span>`)):0;
   if(N.R)r.push(kv(`Rimborsi spese condivise <small>${N.aff?"quota affitto "+fmt(N.aff)+" a casa e utenze":""}${N.R-N.aff-N.nonRip>0.005?(N.aff?"; ":"")+"il resto in parti uguali tra "+N.cond.filter(c=>N.alloc[c]-(c==="casa"?N.aff:0)>0.005).map(movLbl).join(", ").toLowerCase():""}${N.nonRip>0.005?"; "+fmt(N.nonRip)+" non ripartiti":""}: già tolti dalle uscite</small>`,`<span class="nt-ent">${fmt(N.R,"sign")}</span>`));
   if(N.R)v("Uscite lorde dai conti <small>prima dei rimborsi</small>",tu,"nt-spese");
