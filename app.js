@@ -2,8 +2,8 @@
 "use strict";
 /* ================= modello dati ================= */
 const MESI=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
-const FONTI=[["lp","Libera professione","P.IVA forfettario"],["gm","Guardia medica","già tassata dall'ASL"],["ssn","Stipendio SSN","netto in busta"],["sond","Sondaggi","netto"],["spec","Borsa specializzazione","esente"],["altro","Altro",""],["intra","Intramoenia / aggiuntiva","lordo dal cedolino, già nel netto SSN"]];
-const FONTI_Y=Y=>(+Y>=2027?["ssn","intra","sond","altro"]:["lp","gm","ssn","intra","sond","spec","altro"]).map(k=>FONTI.find(f=>f[0]===k));
+const FONTI=[["lp","Libera professione","P.IVA forfettario"],["gm","Guardia medica","già tassata dall'ASL"],["ssn","Stipendio SSN","netto in busta"],["sond","Sondaggi","netto"],["spec","Borsa specializzazione","esente"],["ext","Entrate extra (dai conti)","dagli estratti conto"],["altro","Altro",""],["intra","Intramoenia / aggiuntiva","lordo dal cedolino, già nel netto SSN"]];
+const FONTI_Y=Y=>(+Y>=2027?["ssn","intra","sond","ext","altro"]:["lp","gm","ssn","intra","sond","spec","ext","altro"]).map(k=>FONTI.find(f=>f[0]===k));
 const IN_TOT=k=>k!=="intra";
 const FONTI_E=Y=>FONTI_Y(Y).filter(f=>f[0]!=="intra");
 const FN=Object.fromEntries(FONTI.map(f=>[f[0],f[1]]));
@@ -640,7 +640,7 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
   const d=q.ent-mp.entC.tot,row=(l,v)=>`<div class="ecr"><span>${l}</span><b>${fmt(v)}</b></div>`;
   entCmp=Math.abs(d)<0.5?"":`<details class="ecmp"><summary>Entrate registrate ${fmt(q.ent)} · dai conti ${fmt(mp.entC.tot)} · differenza <b class="${d<0?"neg":""}">${fmt(d,"sign")}</b></summary>
   <div class="ecmp-in"><div><h4>Registrate <small>scheda Entrate · grafico in alto</small></h4>${Object.entries(reg).map(([l,v])=>row(l,v)).join("")}</div><div><h4>Dai conti <small>ciambella «Entrate»</small></h4>${mp.entC.voci.map(x=>row(x[0],x[1])).join("")}</div></div>
-  <p class="note">Il grafico in alto usa le entrate registrate (stipendio = netto del cedolino nel mese di pagamento, sondaggi = prelievi dell'app, libera professione al lordo, altro inserito a mano) perché il guadagno del mese viene dai saldi di Patrimonio. La ciambella usa gli accrediti degli estratti conto: le entrate «extra» e quelle via PayPal non registrate, o uno stipendio accreditato in un giorno diverso da quello del cedolino, fanno la differenza.</p></details>`;}
+  <p class="note">Il grafico in alto usa le entrate registrate (stipendio = netto del cedolino nel mese di pagamento, sondaggi = prelievi dell'app, libera professione al lordo, altro inserito a mano) perché il guadagno del mese viene dai saldi di Patrimonio. La ciambella usa gli accrediti degli estratti conto. Le entrate extra (anche via PayPal) entrano da sole tra le registrate (fonte «Entrate extra (dai conti)»): la differenza che resta viene di solito dallo stipendio accreditato in un giorno o importo diverso dal cedolino, o da entrate registrate a mano che non passano dai conti.</p></details>`;}
  const pies=[resPie,...(mp.pies||[])].filter(Boolean);
  const altri=qG+resAltri+(mp.altri||"")+(q&&q.src==="res"&&mp.netto?mp.netto:"");
  return `<section class="sheet">
@@ -670,6 +670,7 @@ V.entrate=()=>{
   <td class="c"><button class="icon-btn" data-act="del-mov" data-idx="${i}" aria-label="Elimina movimento" ${READONLY?"disabled":""}>×</button></td></tr>`).join("");
  const FY=FONTI_E(Y),used=+Y>=2027?FY:FY.filter(([k])=>T&&T.tot[k]!==0);const cols=used.length?used:FY;
  let piv="";if(T){MESI.forEach((m,i)=>{piv+=`<tr><td>${m}</td>${cols.map(([k])=>{const nE=cellEntries(Y,i,k).length;if(k==="sond"&&sondCovers(`${Y}-${String(i+1).padStart(2,"0")}`))return `<td class="auto-c" title="Prelievi dall'app Guadagni sondaggi">${out(`${c}.mm.${k}.${i}`)}<span class="nm">auto</span></td>`;
+   if(k==="ext")return `<td class="auto-c" title="Entrate extra ed extra via PayPal dagli estratti conto (Resoconto mensile)">${out(`${c}.mm.${k}.${i}`)}<span class="nm">conti</span></td>`;
    if(cedCovers(`${Y}-${String(i+1).padStart(2,"0")}`,k))return `<td class="auto-c" title="Netto dal cedolino (scheda Cedolini)">${out(`${c}.mm.${k}.${i}`)}<span class="nm">cedolino</span></td>`;return nE>1?`<td class="multi" title="${nE} movimenti: modificali nell'elenco dettagliato">${out(`${c}.mm.${k}.${i}`)}<span class="nm">${nE} mov.</span></td>`:`<td class="ce">${cellInp(Y,i,k)}</td>`;}).join("")}<td class="gain">${out(`${c}.tm.${i}`)}</td></tr>`;});
   piv+=`<tr class="tot"><td>Totale ${Y}</td>${cols.map(([k])=>`<td>${out(`${c}.tot.${k}`)}</td>`).join("")}<td class="gain">${out(`${c}.tot.all`)}</td></tr>`;}
  const today=TODAY;
@@ -1016,7 +1017,7 @@ view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("
 view.addEventListener("change",e=>{const t=e.target;if(!t.classList||!t.classList.contains("ric-da")||READONLY)return;
  const r=S.ricorrenti[+t.dataset.idx];if(!r||!/^\d{4}-\d{2}$/.test(t.value)){render();return;}
  r.da=t.value;r.esclusi=r.esclusi.filter(x=>typeof x!=="string"||x>=r.da);ensureRic(S);render();scheduleSave();});
-view.addEventListener("keydown",e=>{const t=e.target;if(t.classList&&t.classList.contains("lk")&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click();}});
+view.addEventListener("keydown",e=>{const t=e.target;if(t.classList&&(t.classList.contains("lk")||t.classList.contains("mvr-m"))&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click();}});
 /* scorrimento laterale sul grafico del resoconto = mese prima/dopo */
 let MCH_X=null;
 view.addEventListener("touchstart",e=>{MCH_X=e.target.closest(".mch-vp")?[e.touches[0].clientX,e.touches[0].clientY]:null;},{passive:true});
@@ -1029,7 +1030,7 @@ view.addEventListener("input",e=>{
  const k=el.dataset.k;
  if(k==="cell"){const p=parseIt(el.value);if(!p.ok){el.classList.add("bad");return;}el.classList.remove("bad");
    const Y=+el.dataset.y,m=+el.dataset.m,f=el.dataset.f,e=cellEntries(Y,m,f);
-   if(cedCovers(`${Y}-${String(m+1).padStart(2,"0")}`,f))return;
+   if(f==="ext"||cedCovers(`${Y}-${String(m+1).padStart(2,"0")}`,f))return;
    if(p.v==null){if(e.length===1)S.registro.splice(e[0],1);}
    else if(e.length===1)S.registro[e[0]].importo=p.v;
    else if(e.length===0){const d=new Date(Y,m+1,0).getDate();S.registro.push({id:uid(),data:`${Y}-${String(m+1).padStart(2,"0")}-${d}`,fonte:f,importo:p.v,nota:"Totale del mese"});}
@@ -1065,6 +1066,7 @@ view.addEventListener("click",e=>{
  if(a==="year"){UY=y;render();return;}
  if(a==="svv"){SVV=b.dataset.v;render();const t=document.getElementById("svt-det");if(t)t.scrollIntoView({block:"nearest"});return;}
  if(a==="mm"){if(b.dataset.mm){MM=b.dataset.mm;render();}return;}
+ if(a==="mvrow"){const ed=b.nextElementSibling,op=ed&&ed.hidden;if(ed){ed.hidden=!op;b.setAttribute("aria-expanded",op);if(op){const sl=ed.querySelector("select");if(sl)sl.focus({preventScroll:true});}}return;}
  if(a==="mvleg"){const k=b.dataset.k,pn=b.parentElement.querySelector(`[data-p="${k}"]`),op=!MOV_LEG.has(k);op?MOV_LEG.add(k):MOV_LEG.delete(k);b.setAttribute("aria-expanded",op);if(pn)pn.hidden=!op;return;}
  if(a==="sy"){SY=b.dataset.g;EDIT=null;render();return;}
  if(a==="pt"){PT=b.dataset.v;render();return;}
@@ -1099,6 +1101,7 @@ view.addEventListener("submit",e=>{
  const msg=document.getElementById("nm-msg");
  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!p.ok||p.v==null){msg.hidden=false;msg.textContent="Inserisci una data e un importo validi.";return;}
  if(f==="sond"&&sondCovers(d.slice(0,7))){msg.hidden=false;msg.textContent="I sondaggi di "+MESE_L(d.slice(0,7))+" arrivano dall'app Guadagni sondaggi: registra lì il prelievo.";return;}
+ if(f==="ext"){msg.hidden=false;msg.textContent="Le entrate extra arrivano dagli estratti conto: classifica il movimento come «Entrate extra» nel Resoconto mensile.";return;}
  if(cedCovers(d.slice(0,7),f)){msg.hidden=false;msg.textContent="Lo stipendio di "+MESE_L(d.slice(0,7))+" arriva dal cedolino: per correggerlo cambia il PDF nella cartella Cedolini.";return;}
  S.registro.push({id:uid(),data:d,fonte:f,importo:p.v,nota});
  const y=+d.slice(0,4);if(!allYears().includes(y))S.patrimonio[y]=S.patrimonio[y]||blankPat();
@@ -1749,7 +1752,7 @@ async function movSync(manual,path,body){
  if(MOV_BUSY||!hubUrl()){if(manual&&!hubUrl())linkMsg("mov","Serve l'indirizzo dell'Hub.");return;}
  MOV_BUSY=true;if(manual)linkMsg("mov","Leggo gli estratti conto dal PC…");
  try{const r=path?await hubFetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}):await hubFetch("/api/estratti/archivio");
-  const prima=JSON.stringify(movLoad()&&movLoad().movimenti||[]);movStore(r);MOV_ERR="";if(!READONLY&&applyEstrSaldi()){save();if(current!=="mese")afterExternalChange();}
+  const prima=JSON.stringify(movLoad()&&movLoad().movimenti||[]);movStore(r);MOV_ERR="";if(!READONLY&&(applyEstrSaldi()|applyExtra())){save();if(current!=="mese")afterExternalChange();}
   if(manual)linkMsg("mov",r.movimenti.length+" movimenti letti.");
   if(current==="mese"||(current==="dashboard"&&JSON.stringify(r.movimenti)!==prima))afterExternalChange();}
  catch(e){MOV_ERR=e.message;if(manual)linkMsg("mov","Estratti conto non letti: "+e.message+".");if(current==="mese")afterExternalChange();}
@@ -1788,6 +1791,16 @@ function sondMese(ym){svLoad();const r={banca:0,paypal:0,amazon:0,tot:0,senza:[]
    Revolut = conto + deposito Revolut, Fineco = conto Fineco + conto deposito vincolato (S.vincolato.fineco, inserito a
    mano: non compare nell'estratto; finché è vuoto Fineco resta manuale). Un conto senza movimenti nel mese tiene il
    saldo del mese prima. Celle riempite in sola lettura («estratto»); mesi in S.patEstr. */
+/* v35 (decisione di Marco): le entrate extra dei conti sono guadagni → righe automatiche in Entrate, fonte «ext»,
+   una per mese = «Entrate extra» (categoria extra) + «Extra via PayPal» (ppAuto). Solo i mesi presenti negli estratti
+   di questo dispositivo; gli altri mesi non si toccano. */
+function applyExtra(){const L=movMesi();if(!L.length)return false;const inL=new Set(L);
+ const sig=a=>JSON.stringify(a.filter(r=>r.fonte==="ext").map(r=>[r.data,r.importo]).sort());const prima=sig(S.registro);
+ const keep=S.registro.filter(r=>!(r.fonte==="ext"&&inL.has((r.data||"").slice(0,7))));
+ const add=L.map(ym=>{const o=movRiep(ym),v=Math.max(o.extra||0,0)+(ppAuto(ym).extra||0);if(v<0.005)return null;const [y,m]=ym.split("-").map(Number);
+  return{id:"est-ext-"+ym,data:`${ym}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`,fonte:"ext",importo:Math.round(v*100)/100,nota:"Entrate extra dagli estratti conto",ext:"estratti"};}).filter(Boolean);
+ const nuovo=[...keep,...add];if(sig(nuovo)===prima)return false;S.registro=nuovo;
+ add.forEach(r=>{const y=+r.data.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});return true;}
 function applyEstrSaldi(){const d=movLoad();if(!d||!Array.isArray(d.quadratura))return false;
  const cur=new Date().toLocaleDateString("sv-SE").slice(0,7),last={},per={};
  d.quadratura.slice().sort((a,b)=>a.mese.localeCompare(b.mese)).forEach(q=>{(per[q.mese]=per[q.mese]||{})[q.conto]=q;});
@@ -1834,7 +1847,7 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
    else if(key==="amz"){nota=`Buoni Amazon prelevati nell'app Guadagni (${fmt(N.amz)}): non passano dai conti.`;}
    else{L=byC(key);if(box==="u"&&N.alloc[key])nota=`Spesa lorda ${fmt(-o[key])} − rimborsi ≈ ${fmt(N.alloc[key])} = ≈ ${fmt(-N.net[key])}.`;}
    L.sort((a,b)=>a.data.localeCompare(b.data));
-   return `${nota?`<p class="note">${nota}</p>`:""}${L.length?`<div class="mvl-mini">${L.map(m=>`<div class="mvr-m${m.importo>0?" in":""}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)}${m.dett&&m.dett!==m.descr?" · "+esc(m.dett):""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span></div>`).join("")}</div><p class="mvl-tot">${L.length} ${L.length===1?"movimento":"movimenti"} · totale <b>${fmt(sum(L.map(m=>m.importo)),"sign")}</b></p>`:key==="amz"?"":`<p class="muted">Nessun movimento sui conti in questa categoria.</p>`}`;};
+   return `${nota?`<p class="note">${nota}</p>`:""}${L.length?`<div class="mvl-mini">${L.map(m=>`<div class="mvr-m${m.importo>0?" in":""}" data-act="mvrow" role="button" tabindex="0" aria-expanded="false" title="Tocca per cambiare categoria"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)}${m.dett&&m.dett!==m.descr?" · "+esc(m.dett):""}${m.orig==="regola"?" · regola":m.orig==="scelta"?" · scelta tua":""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span></div><div class="mvr-ed" hidden><label>Categoria <select class="in sel mv-set" data-id="${m.id}" ${READONLY?"disabled":""}>${opt(m.cat)}</select></label>${regK.has(m.chiave)?`<small>Questa controparte ha una regola: ti chiederò se cambiare tutti i suoi movimenti o solo questo.</small>`:`<small>Cambia solo questo movimento. Per tutti quelli della stessa controparte usa «sempre» in «Tutti i movimenti».</small>`}</div>`).join("")}</div><p class="mvl-tot">${L.length} ${L.length===1?"movimento":"movimenti"} · totale <b>${fmt(sum(L.map(m=>m.importo)),"sign")}</b></p>`:key==="amz"?"":`<p class="muted">Nessun movimento sui conti in questa categoria.</p>`}`;};
   const legLi=(box,tot)=>([l,v,c,key])=>li(c,l,v,tot).replace("<li>",`<li class="lk" data-act="mvleg" data-k="${box}-${key}" role="button" tabindex="0" aria-expanded="${MOV_LEG.has(box+"-"+key)}" title="Mostra i movimenti">`)+`<li class="mvleg-p" data-p="${box}-${key}" ${MOV_LEG.has(box+"-"+key)?"":"hidden"}>${legList(key,box)}</li>`;
   const card=(t,arr,tot,lab,box)=>`<div class="box mvpie"><h3>${t} <small>${mn}</small></h3><div class="mvpie-in">${donut(arr.map(x=>x.slice(0,3)),150,18,t+" di "+mn,1,tot,lab)}<ul class="pleg pleg-k">${arr.map(legLi(box,tot)).join("")||`<li><span class="muted">Nessun dato</span></li>`}</ul></div><p class="note mvleg-h">Tocca una voce per vedere i movimenti.</p></div>`;
   parts.pies=[card("Entrate",ent,tE,"entrate","e"),card("Uscite",usc,tU,"uscite nette","u")];parts.entC={tot:tE,voci:ent};}
@@ -1890,7 +1903,7 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']")
 view.addEventListener("change",e=>{const t=e.target;
  if(t.id==="mov-sel"){MOV_M=t.value;render();return;}
  if(t.id==="mov-fc"){MOV_FC=t.value;movFiltra();return;}
- if(t.classList&&t.classList.contains("mv-canale")){if(READONLY)return;if(!t.value)return;S.sondCanali=Object.assign({},S.sondCanali,{[t.dataset.site]:t.value});scheduleSave();render();return;}
+ if(t.classList&&t.classList.contains("mv-canale")){if(READONLY)return;if(!t.value)return;S.sondCanali=Object.assign({},S.sondCanali,{[t.dataset.site]:t.value});applyExtra();scheduleSave();render();return;}
  if(t.classList&&t.classList.contains("mv-cond")){if(READONLY)return;S.movCond=[...document.querySelectorAll(".mv-cond")].filter(x=>x.checked).map(x=>x.value);scheduleSave();render();return;}
  if(t.classList&&(t.classList.contains("mv-cat")||t.classList.contains("mv-ric"))){const id=t.dataset.id,P=MOV_PEND[id]=MOV_PEND[id]||{};
   if(t.classList.contains("mv-cat"))P.cat=t.value;else P.ric=t.checked;return;}
@@ -1924,7 +1937,7 @@ themeUI();
  if(raw){try{S=load(JSON.parse(raw));status("ok","Dati salvati su questo dispositivo");}
   catch(e){S=load(null);status("err","Dati locali illeggibili: ripristina un backup");}}
  else{S=load(null);status("busy","Nessun dato: importa o ripristina un backup");}
- svLoad();render();refreshLinks();
+ svLoad();try{if(!READONLY&&applyExtra())scheduleSave();}catch(e){}render();refreshLinks();
  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
  setTimeout(()=>{hubPull().finally(()=>{sondSync(false);cedSync(false);cartSync(false);hubSync(false);movSync(false);});},1200);
  setTimeout(()=>svHubSync(false),4000);
