@@ -866,3 +866,9 @@ button.mst-t{cursor:pointer;opacity:.62;transition:opacity .15s,border-color .15
 .mhb-bar{height:16px;border-radius:6px;background:color-mix(in srgb,var(--line) 60%,transparent);overflow:hidden;display:flex}
 .mhb-bar i{display:block;height:100%;flex:none}.mhb-bar i+i{border-left:2px solid var(--surface)}
 .mhb-sc{display:flex;justify-content:space-between;font:10.5px var(--f-mono);color:var(--muted);margin-top:-4px}
+/* v40: dashboard «Mese corrente» a barre orizzontali, «Andamento» col grafico dei 12 mesi; medie per categoria in Andamento */
+.psub-in.psub-col{flex-direction:column;align-items:stretch;gap:12px}
+.psub .mhb{gap:9px}.psub .mhb-t{font-size:13px}.psub .mhb-t b{font-size:13px}.psub .mhb-bar{height:12px}
+.eschart-d svg{display:block;width:100%;height:auto}.eschart-d text{fill:var(--muted);font-size:11px;font-family:var(--f-mono)}
+.psub .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}.psub .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+#avg-box .mvpie{border:0;box-shadow:none;padding:4px 0;background:none}
