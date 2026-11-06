@@ -575,7 +575,7 @@ const colChart=(q,h)=>{const inv=Math.max(q.inv,0),top=Math.max(q.ent,q.usc+inv,
  return `<div class="mcol" style="height:${h}px" role="img" aria-label="Entrate ${fmt(q.ent)}; uscite ${fmt(q.usc)}; investito ${fmt(inv)}; ${g>=0?"guadagno":"perdita"} ${fmt(Math.abs(g))}">
   <div class="mc-c"><div class="mc-b">${seg("mc-ent",q.ent,"Entrate")}${g<0?seg("mc-loss",-g,"Perdita del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Entrate</span></div>
   <div class="mc-c"><div class="mc-b">${seg("mc-usc",q.usc,"Uscite")}${seg("mc-inv",inv,"Investito")}${g>0?seg("mc-gain",g,"Guadagno del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Uscite + investito</span></div></div>`;};
-const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}${g>=0?li("c-risp","Guadagno del mese",g,q.ent).replace("background:var(--c-risp)","background:color-mix(in srgb,var(--c-risp) var(--gain-a,32%),transparent);box-shadow:inset 0 2px 0 var(--c-risp)"):li("neg","Perdita del mese",-g,q.ent).replace("background:var(--neg)","background:repeating-linear-gradient(45deg,var(--neg) 0 3px,var(--neg-soft) 3px 6px)")}</ul>`;};
+const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<div class="mleg"><ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}</ul><dl class="kv mleg-kv">${kv(g>=0?"Guadagno del mese <small>rimasto sui conti</small>":"Perdita del mese <small>presa dai conti</small>",`<span class="${g<0?"neg":"pos"}">${fmt(g,"sign")}</span>`,"strong")}${kv("Guadagno complessivo <small>guadagno + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`)}${q.ent>0?kv("Tasso di risparmio",fmt(q.guad/q.ent,"pct1")):""}</dl></div>`;};
 /* chip della dashboard: unico collegamento al Resoconto mensile */
 function riepPsub(){const L=mesiSum();let q=null;for(let i=L.length-1;i>=0&&!q;i--)q=mesSum(L[i]);if(!q)return "";const mn=MESE_L(q.ym).toLowerCase();
  return `<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${q.ym}" title="Apri il resoconto mensile"><h4>Riepilogo del mese <small>${mn}</small></h4><span hidden data-psum>${fmt(Math.round(q.guad),"sign").replace(/,\d\d(?=\s|$)/,"")}</span>
@@ -587,25 +587,22 @@ let MCH_AT=null;
 const niceStep=v=>{const p=10**Math.floor(Math.log10(v)),r=v/p;return (r<=1?1:r<=2?2:r<=2.5?2.5:r<=5?5:10)*p;};
 const fInt=v=>new Intl.NumberFormat("it-IT",{maximumFractionDigits:0,useGrouping:"always"}).format(v);
 function mchHTML(L,k){
+ /* v37 (opzione D scelta da Marco): in alto i tre mesi (prima · scelto · dopo) in miniatura, da toccare; sotto il mese
+    scelto a barre orizzontali con gli importi. Scala comune a tutti i mesi. Il guadagno è solo in numeri. */
  const Q=L.map(mesSum),mx=Math.max(1,...Q.filter(Boolean).map(q=>Math.max(q.ent,Math.max(q.usc,0)+Math.max(q.inv,0))));
- const st=niceStep(mx/4),top=Math.ceil(mx/st-1e-9)*st,y=v=>(Math.max(v,0)/top*100).toFixed(3)+"%";
- const ticks=Array.from({length:Math.round(top/st)+1},(_,i)=>i*st);
- const seg=(c,v,t)=>v>0.005?`<i class="${c}" style="height:${y(v)}" title="${t}: ${fmt(v)}"></i>`:"";
- const slot=(q,ym,i)=>{const sel=i===k,m=MESI[+ym.slice(5)-1];
-  if(!q)return `<span class="mch-m${sel?" sel":""}"><span class="mch-p"></span><span class="mch-l">${m.slice(0,3)} <small>${ym.slice(0,4)}</small></span><span class="mch-g">—</span></span>`;
-  const inv=Math.max(q.inv,0),usc=Math.max(q.usc,0),g=q.liq;
-  const tag=sel?"span":"button",att=sel?`aria-current="true"`:`data-act="mm" data-mm="${ym}" aria-label="Vai a ${m.toLowerCase()} ${ym.slice(0,4)}"`;
-  return `<${tag} class="mch-m${sel?" sel":""}" ${att} title="${m} ${ym.slice(0,4)} · entrate ${fmt(q.ent)} · uscite ${fmt(usc)} · investito ${fmt(inv)} · ${g>=0?"guadagno":"perdita"} ${fmt(Math.abs(g))}">
-   <span class="mch-p"><span class="mch-c">${seg("mc-ent",q.ent,"Entrate")}${g<0?seg("mc-loss",-g,"Perdita del mese"):""}</span><span class="mch-c">${seg("mc-usc",usc,"Uscite")}${seg("mc-inv",inv,"Investito")}${g>0?seg("mc-gain",g,"Guadagno del mese"):""}</span></span>
-   <span class="mch-l">${m.slice(0,3)} <small>${ym.slice(0,4)}</small></span><span class="mch-g ${g<0?"neg":"pos"}">${fmt(Math.round(g),"sign").replace(/,\d\d(?=\s|$)/,"")}</span></${tag}>`;};
- const to=1-k,from=MCH_AT&&L.includes(MCH_AT)?1-L.indexOf(MCH_AT):to;MCH_AT=L[k];
- const tr=d=>`translateX(calc(${d} * 100% / 3))`;
- if(from!==to)requestAnimationFrame(()=>{const t=document.querySelector("#view .mch-track");if(t){void t.offsetWidth;t.style.transform=tr(to);}});
- const q=Q[k];
- return `<div class="mch" role="img" aria-label="${q?`${MESE_L(L[k])}: entrate ${fmt(q.ent)}, uscite ${fmt(q.usc)}, investito ${fmt(Math.max(q.inv,0))}, ${q.liq>=0?"guadagno":"perdita"} ${fmt(Math.abs(q.liq))}`:"Entrate e uscite per mese"}">
-  <div class="mch-y" aria-hidden="true">${ticks.map((t,i)=>`<span style="bottom:${y(t)}">${fInt(t)}${i===ticks.length-1?" €":""}</span>`).join("")}</div>
-  <div class="mch-vp"><div class="mch-hl" aria-hidden="true"></div><div class="mch-grid" aria-hidden="true">${ticks.map(t=>`<i style="bottom:${y(t)}"${t===0?' class="z"':""}></i>`).join("")}</div>
-   <div class="mch-track" style="transform:${tr(from)}">${L.map((ym,i)=>slot(Q[i],ym,i)).join("")}</div></div></div>`;}
+ const st=niceStep(mx/2),top=Math.ceil(mx/st-1e-9)*st,pc=v=>(Math.max(v,0)/top*100).toFixed(2)+"%";
+ const MH=38,hp=v=>(Math.max(v,0)/top*MH).toFixed(1)+"px";
+ const tile=i=>{const ym=L[i],q=Q[i];if(ym==null)return `<span class="mst-t mst-void" aria-hidden="true"></span>`;
+  const m=MESI[+ym.slice(5)-1],sel=i===k,g=q?q.liq:null;
+  const mini=q?`<span class="mst-mini" aria-hidden="true"><span><i class="mc-ent" style="height:${hp(q.ent)}"></i></span><span><i class="mc-usc" style="height:${hp(q.usc)}"></i><i class="mc-inv" style="height:${hp(q.inv)}"></i></span></span>`:`<span class="mst-mini"></span>`;
+  const inner=`${mini}<b>${m.slice(0,3)} <small>${ym.slice(0,4)}</small></b><em class="${g==null?"":g<0?"neg":"pos"}">${g==null?"—":fmt(Math.round(g),"sign").replace(/,\d\d(?=\s|$)/,"")}</em>`;
+  return sel?`<span class="mst-t sel" aria-current="true">${inner}</span>`:`<button class="mst-t" data-act="mm" data-mm="${ym}" aria-label="Vai a ${m.toLowerCase()} ${ym.slice(0,4)}">${inner}</button>`;};
+ const q=Q[k];MCH_AT=L[k];
+ const bars=q?`<div class="mhb">
+  <div class="mhb-r"><div class="mhb-t"><span>Entrate</span><b class="nt-ent">${fmt(q.ent)}</b></div><div class="mhb-bar" title="Entrate: ${fmt(q.ent)}"><i class="mc-ent" style="width:${pc(q.ent)}"></i></div></div>
+  <div class="mhb-r"><div class="mhb-t"><span>Uscite <small>+ investito</small></span><b>${fmt(Math.max(q.usc,0)+Math.max(q.inv,0))}</b></div><div class="mhb-bar"><i class="mc-usc" style="width:${pc(q.usc)}" title="Uscite: ${fmt(q.usc)}"></i><i class="mc-inv" style="width:${pc(q.inv)}" title="Investito: ${fmt(q.inv)}"></i></div></div>
+  <div class="mhb-sc" aria-hidden="true"><span>0</span><span>${fInt(top/2)}</span><span>${fInt(top)} €</span></div></div>`:`<p class="muted">Nessun dato per questo mese.</p>`;
+ return `<div class="mch2 mch-vp" role="group" aria-label="Entrate e uscite: ${MESE_L(L[k])}"><div class="mst">${tile(k-1)}${tile(k)}${tile(k+1)}</div>${bars}</div>`;}
 let MM=null;
 const monthsAvail=()=>Object.keys(R.svAll||{}).sort().flatMap(Y=>R.svAll[Y].ent.map((v,i)=>v!=null?`${Y}-${String(i+1).padStart(2,"0")}`:null).filter(Boolean));
 V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
@@ -631,18 +628,18 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
   resPie=`<div class="box mvpie${neg?" neg-box":""}"><h3>${neg?"Uscite":"Uso delle entrate"} <small>${mn}</small></h3><div class="mvpie-in">${dn}<ul class="pleg">${leg}</ul></div></div>`;
   negB=neg?`<div class="banner neg-b"><b>Mese in rosso</b>: le uscite (${fmt(usc)}) hanno superato le entrate (${fmt(ent)}) di <b>${fmt(def)}</b>, presi dai risparmi.${g("risp")<0?` La liquidità è scesa di ${fmt(-g("risp"))}.`:` La liquidità non è scesa (${fmt(g("risp"),"sign")}) solo perché le tasse da accantonare non sono ancora state pagate.`}</div>`:"";
   const ya=R.ytdAll[Y],avg=ya&&ya.n?ya.ent/ya.n:null;
-  resAltri=kv("Tasso di risparmio",fmt(g("tasso"),"pct1"))+kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)+kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
+  resAltri=kv("Da accantonare per tasse <small>maturate sulle entrate del mese</small>",`<span class="nt-tasse">${fmt(g("acc")||0)}</span>`)+kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)+kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+(affM>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(affM)}</span>`):"")+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
  const qG=q?kv("Guadagno complessivo <small>guadagno del mese + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`,"strong"):"";
  const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${mchHTML(L,k)}${colLeg(q)}</div>
-  <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} La fascia verde sopra le uscite è il guadagno del mese rimasto sui conti (in rosso tratteggiato, sopra le entrate, la perdita). Al centro il mese scelto; tocca un mese accanto o scorri per cambiarlo. Stessa scala per tutti i mesi.</p></div>`:"";
+  <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} In alto il mese scelto e quelli accanto (toccali o scorri per cambiare mese); le barre usano la stessa scala per tutti i mesi. La differenza tra le due barre è il guadagno (o la perdita) del mese, indicato sotto.</p></div>`:"";
  /* v34: confronto entrate registrate (grafico in alto, fonte resoconto) e entrate dai conti (ciambella «Entrate») */
  let entCmp="";if(q&&q.src==="res"&&mp.entC){const reg={};S.registro.filter(r=>r.data.startsWith(MM)&&IN_TOT(r.fonte)).forEach(r=>{const l=FN[r.fonte]||r.fonte;reg[l]=(reg[l]||0)+(+r.importo||0);});
   const d=q.ent-mp.entC.tot,row=(l,v)=>`<div class="ecr"><span>${l}</span><b>${fmt(v)}</b></div>`;
   entCmp=Math.abs(d)<0.5?"":`<details class="ecmp"><summary>Entrate registrate ${fmt(q.ent)} · dai conti ${fmt(mp.entC.tot)} · differenza <b class="${d<0?"neg":""}">${fmt(d,"sign")}</b></summary>
   <div class="ecmp-in"><div><h4>Registrate <small>scheda Entrate · grafico in alto</small></h4>${Object.entries(reg).map(([l,v])=>row(l,v)).join("")}</div><div><h4>Dai conti <small>ciambella «Entrate»</small></h4>${mp.entC.voci.map(x=>row(x[0],x[1])).join("")}</div></div>
   <p class="note">Il grafico in alto usa le entrate registrate (stipendio = netto del cedolino nel mese di pagamento, sondaggi = prelievi dell'app, libera professione al lordo, altro inserito a mano) perché il guadagno del mese viene dai saldi di Patrimonio. La ciambella usa gli accrediti degli estratti conto. Le entrate extra (anche via PayPal) entrano da sole tra le registrate (fonte «Entrate extra (dai conti)»): la differenza che resta viene di solito dallo stipendio accreditato in un giorno o importo diverso dal cedolino, o da entrate registrate a mano che non passano dai conti.</p></details>`;}
- const pies=[resPie,...(mp.pies||[])].filter(Boolean);
- const altri=qG+resAltri+(mp.altri||"")+(q&&q.src==="res"&&mp.netto?mp.netto:"");
+ const pies=[...(mp.pies||[])].filter(Boolean); // v36: tolta la ciambella «Uso delle entrate» (doppione del grafico a colonne)
+ const altri=resAltri+(mp.altri||"")+(q&&q.src==="res"&&mp.netto?mp.netto:"");
  return `<section class="sheet">
  ${headH}
  ${navH}
