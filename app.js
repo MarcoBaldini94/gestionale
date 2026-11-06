@@ -575,12 +575,37 @@ const colChart=(q,h)=>{const inv=Math.max(q.inv,0),top=Math.max(q.ent,q.usc+inv,
  return `<div class="mcol" style="height:${h}px" role="img" aria-label="Entrate ${fmt(q.ent)}; uscite ${fmt(q.usc)}; investito ${fmt(inv)}; ${g>=0?"guadagno":"perdita"} ${fmt(Math.abs(g))}">
   <div class="mc-c"><div class="mc-b">${seg("mc-ent",q.ent,"Entrate")}${g<0?seg("mc-loss",-g,"Perdita del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Entrate</span></div>
   <div class="mc-c"><div class="mc-b">${seg("mc-usc",q.usc,"Uscite")}${seg("mc-inv",inv,"Investito")}${g>0?seg("mc-gain",g,"Guadagno del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Uscite + investito</span></div></div>`;};
-const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}${g>=0?li("c-risp","Guadagno del mese",g,q.ent):li("neg","Perdita del mese",-g,q.ent)}</ul>`;};
+const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}${g>=0?li("c-risp","Guadagno del mese",g,q.ent).replace("background:var(--c-risp)","background:color-mix(in srgb,var(--c-risp) 32%,transparent);box-shadow:inset 0 2px 0 var(--c-risp)"):li("neg","Perdita del mese",-g,q.ent).replace("background:var(--neg)","background:repeating-linear-gradient(45deg,var(--neg) 0 3px,var(--neg-soft) 3px 6px)")}</ul>`;};
 /* chip della dashboard: unico collegamento al Resoconto mensile */
 function riepPsub(){const L=mesiSum();let q=null;for(let i=L.length-1;i>=0&&!q;i--)q=mesSum(L[i]);if(!q)return "";const mn=MESE_L(q.ym).toLowerCase();
  return `<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${q.ym}" title="Apri il resoconto mensile"><h4>Riepilogo del mese <small>${mn}</small></h4><span hidden data-psum>${fmt(Math.round(q.guad),"sign").replace(/,\d\d(?=\s|$)/,"")}</span>
   <div class="psub-in">${colChart(q,112)}<div><dl class="kv">${kv("Guadagno complessivo <small>entrate − uscite</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`)}${kv("Quota investita",`<span class="nt-inv">${fmt(q.inv)}</span>`)}${kv("Risparmio liquido <small>rimasto sui conti</small>",`<span class="${q.liq<0?"neg":"pos"}">${fmt(q.liq,"sign")}</span>`,"strong")}</dl></div></div></a>`;}
 
+/* grafico a colonne mese per mese (v32): scala comune con asse y, mese scelto al centro, mese prima e dopo ai lati;
+   cambiando mese la striscia scorre (MCH_AT = mese al centro nell'ultimo render). */
+let MCH_AT=null;
+const niceStep=v=>{const p=10**Math.floor(Math.log10(v)),r=v/p;return (r<=1?1:r<=2?2:r<=2.5?2.5:r<=5?5:10)*p;};
+const fInt=v=>new Intl.NumberFormat("it-IT",{maximumFractionDigits:0,useGrouping:"always"}).format(v);
+function mchHTML(L,k){
+ const Q=L.map(mesSum),mx=Math.max(1,...Q.filter(Boolean).map(q=>Math.max(q.ent,Math.max(q.usc,0)+Math.max(q.inv,0))));
+ const st=niceStep(mx/4),top=Math.ceil(mx/st-1e-9)*st,y=v=>(Math.max(v,0)/top*100).toFixed(3)+"%";
+ const ticks=Array.from({length:Math.round(top/st)+1},(_,i)=>i*st);
+ const seg=(c,v,t)=>v>0.005?`<i class="${c}" style="height:${y(v)}" title="${t}: ${fmt(v)}"></i>`:"";
+ const slot=(q,ym,i)=>{const sel=i===k,m=MESI[+ym.slice(5)-1];
+  if(!q)return `<span class="mch-m${sel?" sel":""}"><span class="mch-p"></span><span class="mch-l">${m.slice(0,3)} <small>${ym.slice(0,4)}</small></span><span class="mch-g">—</span></span>`;
+  const inv=Math.max(q.inv,0),usc=Math.max(q.usc,0),g=q.liq;
+  const tag=sel?"span":"button",att=sel?`aria-current="true"`:`data-act="mm" data-mm="${ym}" aria-label="Vai a ${m.toLowerCase()} ${ym.slice(0,4)}"`;
+  return `<${tag} class="mch-m${sel?" sel":""}" ${att} title="${m} ${ym.slice(0,4)} · entrate ${fmt(q.ent)} · uscite ${fmt(usc)} · investito ${fmt(inv)} · ${g>=0?"guadagno":"perdita"} ${fmt(Math.abs(g))}">
+   <span class="mch-p"><span class="mch-c">${seg("mc-ent",q.ent,"Entrate")}${g<0?seg("mc-loss",-g,"Perdita del mese"):""}</span><span class="mch-c">${seg("mc-usc",usc,"Uscite")}${seg("mc-inv",inv,"Investito")}${g>0?seg("mc-gain",g,"Guadagno del mese"):""}</span></span>
+   <span class="mch-l">${m.slice(0,3)} <small>${ym.slice(0,4)}</small></span><span class="mch-g ${g<0?"neg":"pos"}">${fmt(Math.round(g),"sign").replace(/,\d\d(?=\s|$)/,"")}</span></${tag}>`;};
+ const to=1-k,from=MCH_AT&&L.includes(MCH_AT)?1-L.indexOf(MCH_AT):to;MCH_AT=L[k];
+ const tr=d=>`translateX(calc(${d} * 100% / 3))`;
+ if(from!==to)requestAnimationFrame(()=>{const t=document.querySelector("#view .mch-track");if(t){void t.offsetWidth;t.style.transform=tr(to);}});
+ const q=Q[k];
+ return `<div class="mch" role="img" aria-label="${q?`${MESE_L(L[k])}: entrate ${fmt(q.ent)}, uscite ${fmt(q.usc)}, investito ${fmt(Math.max(q.inv,0))}, ${q.liq>=0?"guadagno":"perdita"} ${fmt(Math.abs(q.liq))}`:"Entrate e uscite per mese"}">
+  <div class="mch-y" aria-hidden="true">${ticks.map((t,i)=>`<span style="bottom:${y(t)}">${fInt(t)}${i===ticks.length-1?" €":""}</span>`).join("")}</div>
+  <div class="mch-vp"><div class="mch-hl" aria-hidden="true"></div><div class="mch-grid" aria-hidden="true">${ticks.map(t=>`<i style="bottom:${y(t)}"${t===0?' class="z"':""}></i>`).join("")}</div>
+   <div class="mch-track" style="transform:${tr(from)}">${L.map((ym,i)=>slot(Q[i],ym,i)).join("")}</div></div></div>`;}
 let MM=null;
 const monthsAvail=()=>Object.keys(R.svAll||{}).sort().flatMap(Y=>R.svAll[Y].ent.map((v,i)=>v!=null?`${Y}-${String(i+1).padStart(2,"0")}`:null).filter(Boolean));
 V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
@@ -608,8 +633,8 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
   const ya=R.ytdAll[Y],avg=ya&&ya.n?ya.ent/ya.n:null;
   resAltri=kv("Tasso di risparmio",fmt(g("tasso"),"pct1"))+kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)+kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
  const qG=q?kv("Guadagno complessivo <small>guadagno del mese + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`,"strong"):"";
- const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${colChart(q,190)}${colLeg(q)}</div>
-  <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito). Il gap tra le colonne è il guadagno (o la perdita) del mese rimasto sui conti.":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio). Il gap tra le colonne è il guadagno (o la perdita) del mese."}</p></div>`:"";
+ const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${mchHTML(L,k)}${colLeg(q)}</div>
+  <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} La fascia verde sopra le uscite è il guadagno del mese rimasto sui conti (in rosso tratteggiato, sopra le entrate, la perdita). Al centro il mese scelto; tocca un mese accanto o scorri per cambiarlo. Stessa scala per tutti i mesi.</p></div>`:"";
  const pies=[resPie,...(mp.pies||[])].filter(Boolean);
  const altri=qG+resAltri+(mp.altri||"")+(q&&q.src==="res"&&mp.netto?mp.netto:"");
  return `<section class="sheet">
@@ -985,6 +1010,11 @@ view.addEventListener("keydown",e=>{const r=e.target.closest&&e.target.closest("
 view.addEventListener("change",e=>{const t=e.target;if(!t.classList||!t.classList.contains("ric-da")||READONLY)return;
  const r=S.ricorrenti[+t.dataset.idx];if(!r||!/^\d{4}-\d{2}$/.test(t.value)){render();return;}
  r.da=t.value;r.esclusi=r.esclusi.filter(x=>typeof x!=="string"||x>=r.da);ensureRic(S);render();scheduleSave();});
+/* scorrimento laterale sul grafico del resoconto = mese prima/dopo */
+let MCH_X=null;
+view.addEventListener("touchstart",e=>{MCH_X=e.target.closest(".mch-vp")?[e.touches[0].clientX,e.touches[0].clientY]:null;},{passive:true});
+view.addEventListener("touchend",e=>{if(!MCH_X)return;const t=e.changedTouches[0],dx=t.clientX-MCH_X[0],dy=t.clientY-MCH_X[1];MCH_X=null;
+ if(Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy)*1.5)return;const b=document.querySelector(`#view .mnav .mbtn:${dx<0?"last":"first"}-of-type`);if(b&&b.dataset.mm){MM=b.dataset.mm;render();}},{passive:true});
 view.addEventListener("change",e=>{if(e.target.id==="mm-sel"){MM=e.target.value;render();const s2=document.getElementById("mm-sel");if(s2)s2.focus();}});
 view.addEventListener("toggle",e=>{if(e.target.id==="calc-det")CALC_OPEN=e.target.open;if(e.target.id==="notes-det")NOTES_OPEN=e.target.open;if(e.target.id==="svt-det")SVT_OPEN=e.target.open;},true);
 view.addEventListener("input",e=>{
