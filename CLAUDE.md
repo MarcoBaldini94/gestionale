@@ -100,6 +100,9 @@ PWA statica (niente build) pubblicata su GitHub Pages: https://marcobaldini94.gi
 ## Scheda «Collegamenti e backup» (`#collegamenti`)
 Stato sondaggi, cedolini, cartellini, Hub (salva e prova / backup ora / ripristina), backup su file (scarica / importa: accetta S v3, risposta Hub `{dati}`, dump db artefatto).
 
+## Pubblicazione: se GitHub Pages si blocca
+- 06/11/2026: il run «pages build and deployment» n. 34 (v40) è fallito con «Timeout reached, aborting!» nel job deploy (build ok) e il re-run è rimasto in coda. Rimedio: annullare il run bloccato in Actions e fare un nuovo commit (anche solo documentazione) con `pubblica_webapp.bat`, che fa partire un run nuovo. Il sito resta all'ultima versione pubblicata finché un deploy non riesce.
+
 ## Test
 Server statico che serve la cartella sotto `/gestionale/` + finto Hub con CORS su 127.0.0.1:8765 (ping, guadagni/ultimo, bilancio/backup). Verificato con Playwright: import, sync sondaggi (locale vs Hub), backup, ripristino, blocco inserimento manuale, SW registrato, layout mobile 390 px.
 
