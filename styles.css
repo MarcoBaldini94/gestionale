@@ -893,3 +893,13 @@ table.avgt tr.nod-r td{color:var(--muted)}
 #avg-box .avg-g > .avg-p{grid-column:1/-1;min-width:0}
 @media (min-width:721px){#avg-box .avg-g > .avg-c{order:1}#avg-box .avg-g > .avg-p{order:2}}
 table.avgt td:first-child{white-space:nowrap}
+
+/* v43 — collegamenti voci ↔ movimenti dei conti */
+.lk-b{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:10.5px;font-weight:600;color:var(--good);background:color-mix(in srgb,var(--good-soft) 70%,transparent);white-space:nowrap}
+.lk-tag{display:block;margin-top:2px;font-size:11px;font-weight:600;color:var(--good)}
+.lk-p{display:block;font-style:normal;font-size:12px;font-weight:600;color:var(--good);margin-top:2px}
+.lk-box .mve{flex-wrap:wrap;gap:6px}
+.mv-link{max-width:260px;font-size:12px}
+.lk-m{font:inherit;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);cursor:pointer}
+.lk-ok{color:var(--good)}
+@media (max-width:520px){.mve .mv-link{max-width:100%;flex:1 1 100%}}
