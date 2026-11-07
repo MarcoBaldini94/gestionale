@@ -450,7 +450,8 @@ const li=(c,l,v,t,fv)=>{const k=c==="taxh"?"tasse":c.replace(/^c-/,""),hx=c[0]==
 function andLeg(){const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const P=R.patr[R.PY]||{},Y=R.PY,e=x.ent;
  const sub=(c,l,v)=>li(c,l,v,e).replace("<li>",'<li class="lg-s">'),hd=li("c-spese","Uscite",x.sp,e).replace("<li>",'<li class="lg-h">');
  const vt=P.varTot;
- return `<div class="andleg"><ul class="pleg">${li("c-ent","Entrate",e,e)}${hd}${sub("c-tasse","Tasse",x.tasse)}${sub("c-aff","Affitto e utenze",x.casa)}${sub("c-spese","Tutto il resto",x.resto)}${li("c-inv","Soldi investiti",x.inv,e)}${li("c-liq","Surplus di liquidità",x.sur,e)}</ul>
+ const hx=x.acc>0?`<li class="lg-s"><i style="background:repeating-linear-gradient(45deg,var(--c-tasse) 0 2.5px,var(--c-ent) 2.5px 5px)"></i><span>di cui per tasse future <small>(tratteggio)</small></span><b style="color:var(--t-tasse)">${fmt(x.acc)}</b><em>${pc(x.acc,e)}</em></li>`:"";
+ return `<div class="andleg"><ul class="pleg">${li("c-ent","Entrate",e,e)}${hx}${hd}${sub("c-tasse","Tasse",x.tasse)}${sub("c-aff","Affitto e utenze",x.casa)}${sub("c-spese","Tutto il resto",x.resto)}${li("c-inv","Soldi investiti",x.inv,e)}${li("c-liq","Surplus di liquidità",x.sur,e)}</ul>
  <dl class="kv">${(()=>{const k=(R.ytdAll[Y]&&R.ytdAll[Y].n)||0;return k?kv(`Tasse maturate nel ${Y} <small>sulle entrate di ${R.ytdAll[Y].lbl.replace(" "+Y,"")}</small>`,`<span class="nt-tasse">${fmt(x.acc)}</span>`,"strong")+kv(`In media al mese <small>÷ ${k} ${k>1?"mesi":"mese"}</small>`,`<span class="nt-tasse">${fmt(x.acc/k)}</span>`)+kv(`Tasse pagate nel ${Y}`,`<span class="nt-tasse">${fmt(x.tasse)}</span>`):"";})()}${kv("Surplus dell'anno <small>liquidità + investito</small>",`<span class="${x.risp<0?"neg":"pos"}">${fmt(x.risp,"sign")}</span>`,"strong")}${kv(`Variazione del patrimonio <small>da fine ${Y-1}${P.prevInv==null?" · manca l'investito di fine "+(Y-1):""}</small>`,vt==null?`<span class="muted">—</span>`:`<span class="${vt<0?"neg":"pos"}">${fmt(vt,"sign")}</span>`)}</dl></div>`;}
 function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  if(!(L>=0))return `<div class="box pcard"><h3>Composizione del patrimonio</h3><p class="muted">Nessun mese compilato nel ${Y}.</p></div>`;
@@ -592,7 +593,7 @@ V.risparmio=()=>{const PY=R.PY;return `<section class="sheet">
   <div class="box" id="es-box"><h3>Entrate e uscite mese per mese · ${PY} <small>${R.sv&&R.sv.yaLbl||""}</small></h3>
    <div id="eschart"></div>
    ${andLeg()}
-   <p class="note">Per ogni mese: a sinistra le entrate registrate, a destra le uscite (tutto il resto + affitto e utenze + tasse pagate). Uscite = entrate − surplus; affitto e utenze dalla categoria «Casa e utenze» degli estratti conto (netta dei rimborsi), nei mesi senza estratto l'affitto delle spese fisse. Tocca una barra per i valori. Compaiono solo i mesi con i saldi di inizio e fine mese in Patrimonio; i totali sono su questi mesi. Variazione del patrimonio = liquidità + investimenti dell'ultimo mese − valori di fine ${PY-1} (Patrimonio › Valori di fine anno).</p></div>
+   <p class="note">Per ogni mese: a sinistra le entrate registrate (tratteggiata in cima la parte da mettere da parte per le tasse maturate sulle entrate di quel mese: 1/12 della Quota A + Quota B e imposta sostitutiva), a destra le uscite (tutto il resto + affitto e utenze + tasse pagate). Uscite = entrate − surplus; affitto e utenze dalla categoria «Casa e utenze» degli estratti conto (netta dei rimborsi), nei mesi senza estratto l'affitto delle spese fisse. Tocca una barra per i valori. Compaiono solo i mesi con i saldi di inizio e fine mese in Patrimonio; i totali sono su questi mesi. Variazione del patrimonio = liquidità + investimenti dell'ultimo mese − valori di fine ${PY-1} (Patrimonio › Valori di fine anno).</p></div>
   ${avgCatBox(PY)}
   <div class="box" id="sv-box"><h3>Riepilogo mese per mese · ${PY}</h3>
    ${svTable()}
@@ -872,11 +873,14 @@ function esChart(id="eschart"){
  const out_=i=>P("spese")(i)+P("fisse")(i)+P("tasse")(i);
  const mx=Math.max(1000,...MESI.map((_,i)=>Math.max(n(sv.ent[i]),out_(i))));const st=mx>8000?2000:1000,top=Math.ceil(mx/st)*st;
  const y=v=>T+ph-v/top*ph;
- let g="";for(let v=0;v<=top;v+=st)g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" ${v?'stroke-dasharray="3 4"':''}/><text x="${L-5}" y="${y(v)+4}" text-anchor="end">${fN.format(v/1000)}k</text>`;
+ let g=`<defs><pattern id="${id}-htx" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" style="fill:var(--c-ent)"/><rect width="2.4" height="5" style="fill:var(--c-tasse)"/></pattern></defs>`;for(let v=0;v<=top;v+=st)g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" ${v?'stroke-dasharray="3 4"':''}/><text x="${L-5}" y="${y(v)+4}" text-anchor="end">${fN.format(v/1000)}k</text>`;
  let bs="";MESI.forEach((m,i)=>{const cx=L+slot*i+slot/2;g+=`<text x="${cx}" y="${H-6}" text-anchor="middle">${m.slice(0,1)}</text>`;if(sv.ent[i]==null)return;
   const cs=P("casa")(i),rs=Math.max(out_(i)-P("tasse")(i)-cs,0);
-  const tip=`${m}: entrate ${fmt(sv.ent[i])} · uscite ${fmt(out_(i))} (tasse ${fmt(sv.tasse[i])}, affitto e utenze ${fmt(cs)}, resto ${fmt(rs)}) · investito ${fmt(sv.inv[i])} · surplus ${fmt(sv.risp[i],"sign")}`;
+  const tip=`${m}: entrate ${fmt(sv.ent[i])}${n(sv.acc[i])>0?` (di cui per tasse future ${fmt(sv.acc[i])})`:""} · uscite ${fmt(out_(i))} (tasse ${fmt(sv.tasse[i])}, affitto e utenze ${fmt(cs)}, resto ${fmt(rs)}) · investito ${fmt(sv.inv[i])} · surplus ${fmt(sv.risp[i],"sign")}`;
   const e=n(sv.ent[i]);bs+=`<rect x="${cx-bw-1}" y="${y(e)}" width="${bw}" height="${Math.max(1,y(0)-y(e))}" rx="2" style="fill:var(--c-ent)" data-tip="${esc(tip)}"><title>${esc(tip)}</title></rect>`;
+  /* v49 (richiesta di Marco): in cima alla colonna delle entrate, tratteggiata, la parte destinata alle tasse future =
+     tasse maturate sulle entrate di quel mese (sv.acc: 1/12 Quota A + Quota B e imposta maturate nel mese), non la media */
+  const ta=Math.min(Math.max(n(sv.acc[i]),0),e);if(ta>0.5)bs+=`<rect x="${cx-bw-1}" y="${y(e)}" width="${bw}" height="${Math.max(1,y(e-ta)-y(e))}" rx="2" fill="url(#${id}-htx)" data-tip="${esc(tip)}"><title>${esc(tip)}</title></rect>`;
   /* v41: uscite impilate come nella legenda: tutto il resto, affitto e utenze, tasse */
   const PV={resto:rs,casa:cs,tasse:P("tasse")(i)};
   let acc=0;[["resto","--c-spese"],["casa","--c-aff"],["tasse","--c-tasse"]].forEach(([k,c])=>{const v=PV[k];if(!v)return;bs+=`<rect x="${cx+1}" y="${y(acc+v)}" width="${bw}" height="${Math.max(1,y(acc)-y(acc+v))}" style="fill:var(${c})" data-tip="${esc(tip)}"><title>${esc(tip)}</title></rect>`;acc+=v;});});
@@ -1719,21 +1723,25 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
 </section>`;};
 
 /* ================= home: tre sezioni collegate, come l'icona ================= */
-V.home=()=>{const L=S.cart?S.cart.lista:[],x=L[L.length-1];svLoad();
- const Y=String(new Date().getFullYear());let pY=0;svUsed().filter(k=>k.startsWith(Y)).forEach(k=>pY+=svTot(k).p);
- const lav=x?`saldo ${hmS(x.fatto!=null&&x.dovuto!=null?x.fatto-x.dovuto:null)} · ferie ${fN.format(x.ferie.tot!=null?x.ferie.tot:x.ferie.co.residuo+x.ferie.fs.residuo)} gg`:"nessun cartellino";
- const fin=R.dash&&hasRealData(S)?`patrimonio ${fmt(Math.round(R.dash.patrL)).replace(/,\d\d(?=\s|$)/,"")}`:"nessun dato";
- const son=svUsed().length?`prelevato ${Y} ${cE(pY).replace(/,\d\d(?=\s|$)/,"")}`:"nessun dato";
- const node=(cls,href,title,sub,ico)=>`<a class="hn ${cls}" href="#${href}"><span class="hn-c">${ico}</span><span class="hn-t">${title}</span><span class="hn-s">${sub}</span></a>`;
+/* v48: sfere con sfumatura (icona bianca, ombra colorata) disposte a triangolo con Finanze più grande in basso;
+   puntini animati da Lavoro e da Sondaggi verso Finanze (il verso reale dei dati). Solo i nomi, nessun altro testo. */
+V.home=()=>{svLoad();
+ const IC={lav:`<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>`,fin:`<path d="M5 19V13M10 19V9M15 19V11M20 19V5"/>`,son:`<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M8.5 10l1.5 1.5 3-3M8.5 16h7"/>`};
+ const N=[{k:"lav",h:"lavoro",t:"Lavoro",x:72,y:92,r:42,sh:"#2fb0a0",ik:"#fff"},{k:"son",h:"sondaggi",t:"Sondaggi",x:228,y:92,r:42,sh:"#9cc0d3",ik:"#0b3a53"},{k:"fin",h:"dashboard",t:"Finanze",x:150,y:218,r:56,sh:"#eb9a4a",ik:"#fff"}];
+ const node=n=>{const s=n.r>50?1.75:1.4,ly=n.k==="fin"?n.y+n.r+26:n.y-n.r-15;
+  return `<a class="hs-n hs-${n.k}" href="#${n.h}" aria-label="${n.t}"><g class="hs-g"><ellipse cx="${n.x}" cy="${n.y+n.r+2}" rx="${n.r*.75}" ry="${n.r*.18}" fill="${n.sh}" opacity=".45" filter="url(#hs-bl)"/><circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="url(#hs-${n.k})"/><g transform="translate(${n.x-12*s},${n.y-12*s}) scale(${s})" fill="none" stroke="${n.ik}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n.k]}</g></g><text class="hs-t" x="${n.x}" y="${ly}">${n.t}</text></a>`;};
  return `<section class="sheet home">
  ${!hasRealData(S)?`<div class="banner">Nessun dato su questo dispositivo (succede con un browser o un telefono nuovo). Vai in <a href="#collegamenti">Collegamenti e backup</a>: imposta l'indirizzo dell'Hub, poi «Ripristina dall'ultimo backup» per le finanze e «Ripristina dal PC» per i sondaggi. Cartellini e cedolini arrivano da soli.</div>`:""}
- <div class="hgraph">
-  <svg class="hlines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M26 22 L74 22 M26 22 L50 64 M74 22 L50 64"/></svg>
-  ${node("hn-lav","lavoro","Lavoro",lav,`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>`)}
-  ${node("hn-fin","dashboard","Finanze",fin,`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19V13M10 19V9M15 19V11M20 19V5"/></svg>`)}
-  ${node("hn-son","sondaggi","Sondaggi",son,`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M8.5 10l1.5 1.5 3-3M8.5 16h7"/></svg>`)}
- </div>
- <p class="note home-n">Tocca una sezione. I dati sono collegati: le ore del cartellino diventano pagamenti nel cedolino, il netto e i prelievi dei sondaggi entrano nelle Entrate di Finanze.</p>
+ <svg class="hsfere" viewBox="0 18 300 282" role="navigation" aria-label="Sezioni"><defs>
+  <radialGradient id="hs-lav" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#6fd6c8"/><stop offset="1" stop-color="#1c7a6f"/></radialGradient>
+  <radialGradient id="hs-fin" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffc283"/><stop offset="1" stop-color="#b9631a"/></radialGradient>
+  <radialGradient id="hs-son" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#a9c7d8"/></radialGradient>
+  <filter id="hs-bl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter></defs>
+  <path class="hs-l0" d="M72 92L228 92"/>
+  <path class="hs-tr" d="M72 92L150 218M228 92L150 218"/>
+  <path class="hs-fl hs-fl-lav" d="M72 92L150 218"/><path class="hs-fl hs-fl-son" d="M228 92L150 218"/>
+  ${N.map(node).join("")}
+ </svg>
 </section>`;};
 /* ================= movimenti dei conti (estratti conto Fineco e Revolut) ================= */
 /* L'Hub legge in locale gli estratti conto (cartella «Finanze private (per gestionale)») e pubblica
@@ -2005,6 +2013,7 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
  const opt=(sel,prop)=>`<option value="">— scegli —</option>${MOV_CAT.map(([c,l])=>`<option value="${c}" ${c===(sel||prop)?"selected":""}>${l}</option>`).join("")}`;
  const riv=d.movimenti.filter(m=>m.rivedere&&m.data.startsWith(ym)),rivAll=d.movimenti.filter(m=>m.rivedere).length;
  const regK=new Set((d.regole||[]).map(r=>r.chiave)),pend=m=>MOV_PEND[m.id]||{};
+ const nAn={};d.movimenti.forEach(m=>{if(m.chiave)nAn[m.chiave]=(nAn[m.chiave]||0)+1;});
  const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}" data-c="${m.cat||""}" data-q="${esc(((m.descr||"")+" "+(m.dett||"")+" "+m.tipo+" "+m.conto).toLowerCase())}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.carta?" · carta di credito":""}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${edit?"":linkTag(m)}${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
   ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(pend(m).cat!=null?pend(m).cat:(m.proposta||m.cat))}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${(pend(m).ric!=null?pend(m).ric:m.proposta!=="straord")?"checked":""}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
    :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Spuntato: questa controparte ha una regola e i suoi movimenti si classificano da soli"><input type="checkbox" class="mv-ric2" data-id="${m.id}" ${regK.has(m.chiave)?"checked":""}> sempre${regK.has(m.chiave)&&m.orig==="scelta"?" <small>(eccezione)</small>":""}</label>${linkSel(m)}</span>`}</div>`;
@@ -2020,7 +2029,7 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
    else if(key==="vint"){L=mv.filter(m=>/cashpark/i.test(m.tipo||""));nota=`Interessi netti del conto deposito vincolato arrivati alla scadenza: accredito − capitale (${fmt(vincAt(ymAdd(ym,-1)))}, da Patrimonio › Liquidità). Il capitale è un giroconto.`;}
    else{L=byC(key);if(box==="u"&&N.alloc[key])nota=`Spesa lorda ${fmt(-o[key])} − rimborsi ≈ ${fmt(N.alloc[key])} = ≈ ${fmt(-N.net[key])}.`;}
    L.sort((a,b)=>a.data.localeCompare(b.data));
-   return `${nota?`<p class="note">${nota}</p>`:""}${L.length?`<div class="mvl-mini">${L.map(m=>`<div class="mvr-m${m.importo>0?" in":""}" data-act="mvrow" role="button" tabindex="0" aria-expanded="false" title="Tocca per cambiare categoria"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)}${m.dett&&m.dett!==m.descr?" · "+esc(m.dett):""}${m.orig==="regola"?" · regola":m.orig==="scelta"?" · scelta tua":""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span></div><div class="mvr-ed" hidden><label>Categoria <select class="in sel mv-set" data-id="${m.id}" ${READONLY?"disabled":""}>${opt(m.cat)}</select></label>${linkSel(m)?`<label>Collegato a ${linkSel(m)}</label>`:""}${regK.has(m.chiave)?`<small>Questa controparte ha una regola: ti chiederò se cambiare tutti i suoi movimenti o solo questo.</small>`:`<small>Cambia solo questo movimento. Per tutti quelli della stessa controparte usa «sempre» in «Tutti i movimenti».</small>`}</div>`).join("")}</div><p class="mvl-tot">${L.length} ${L.length===1?"movimento":"movimenti"} · totale <b>${fmt(sum(L.map(m=>m.importo)),"sign")}</b></p>`:key==="amz"?"":`<p class="muted">Nessun movimento sui conti in questa categoria.</p>`}`;};
+   return `${nota?`<p class="note">${nota}</p>`:""}${L.length?`<div class="mvl-mini">${L.map(m=>`<div class="mvr-m${m.importo>0?" in":""}" data-act="mvrow" role="button" tabindex="0" aria-expanded="false" title="Tocca per cambiare categoria"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)}${m.dett&&m.dett!==m.descr?" · "+esc(m.dett):""}${m.orig==="regola"?" · regola":m.orig==="scelta"?" · scelta tua":""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span></div><div class="mvr-ed" hidden><label>Categoria <select class="in sel mv-set" data-ed="1" data-id="${m.id}" ${READONLY?"disabled":""}>${opt(m.cat)}</select></label>${(()=>{const nA=(nAn[m.chiave]||1)-1;return `<label class="mv-an-l"><input type="checkbox" class="mv-an" data-id="${m.id}" ${READONLY?"disabled":""}> Applica anche ${nA?`agli altri ${nA===1?"movimento":nA+" movimenti"} di «${esc(m.descr||m.tipo)}» in memoria`:`ai movimenti di «${esc(m.descr||m.tipo)}»`} e a quelli futuri</label>`;})()}${linkSel(m)?`<label>Collegato a ${linkSel(m)}</label>`:""}<small>${regK.has(m.chiave)?"Questa controparte ha già una regola. ":""}Con la casella spuntata la scelta diventa la regola della controparte (vale per tutti i suoi movimenti, tranne quelli impostati a mano uno per uno); senza, cambia solo questo movimento. Puoi spuntare la casella prima di scegliere, oppure dopo per estendere la categoria attuale.</small></div>`).join("")}</div><p class="mvl-tot">${L.length} ${L.length===1?"movimento":"movimenti"} · totale <b>${fmt(sum(L.map(m=>m.importo)),"sign")}</b></p>`:key==="amz"?"":`<p class="muted">Nessun movimento sui conti in questa categoria.</p>`}`;};
   const legLi=(box,tot)=>([l,v,c,key])=>li(c,l,v,tot).replace("<li>",`<li class="lk" data-act="mvleg" data-k="${box}-${key}" role="button" tabindex="0" aria-expanded="${MOV_LEG.has(box+"-"+key)}" title="Mostra i movimenti">`)+`<li class="mvleg-p" data-p="${box}-${key}" ${MOV_LEG.has(box+"-"+key)?"":"hidden"}>${legList(key,box)}</li>`;
   const card=(t,arr,tot,lab,box)=>`<div class="box mvpie"><h3>${t} <small>${mn}</small></h3><div class="mvpie-in">${donut(arr.map(x=>x.slice(0,3)),150,18,t+" di "+mn,1,tot,lab)}<ul class="pleg pleg-k">${arr.map(legLi(box,tot)).join("")||`<li><span class="muted">Nessun dato</span></li>`}</ul></div><p class="note mvleg-h">Tocca una voce per vedere i movimenti.</p></div>`;
   parts.pies=[card("Entrate",ent,tE,"entrate","e"),card("Uscite",usc,tU,"uscite nette","u")];parts.entC={tot:tE,voci:ent};}
@@ -2081,10 +2090,17 @@ view.addEventListener("change",e=>{const t=e.target;
  if(t.classList&&(t.classList.contains("mv-cat")||t.classList.contains("mv-ric"))){const id=t.dataset.id,P=MOV_PEND[id]=MOV_PEND[id]||{};
   if(t.classList.contains("mv-cat"))P.cat=t.value;else P.ric=t.checked;return;}
  if(t.classList&&t.classList.contains("mv-set")){const d=movLoad(),m=d.movimenti.find(x=>x.id===t.dataset.id);if(!m)return;
+  if(t.dataset.ed){const ck=t.closest(".mvr-ed").querySelector(".mv-an"),tutti=!!(ck&&ck.checked)&&t.value!=="";
+   movClassifica([{id:m.id,chiave:m.chiave,cat:t.value,ricorda:tutti}]);return;}
   const haRegola=(d.regole||[]).some(r=>r.chiave===m.chiave);
   /* controparte con regola: si chiede se cambiare tutti i suoi movimenti o solo questo (eccezione) */
   const tutti=haRegola&&t.value!==""&&confirm(`«${m.descr}» ha una regola. Cambiare la regola?\n\nOK = cambia la regola: vale per tutti i suoi movimenti, tranne quelli che hai impostato a mano · Annulla = solo questo movimento (eccezione)`);
   movClassifica([{id:m.id,chiave:m.chiave,cat:t.value,ricorda:tutti}]);return;}
+ if(t.classList&&t.classList.contains("mv-an")){if(!t.checked)return;const d=movLoad(),m=d.movimenti.find(x=>x.id===t.dataset.id);if(!m)return;
+  const s=t.closest(".mvr-ed").querySelector(".mv-set"),cat=(s&&s.value)||m.cat;if(!cat)return; /* nessuna categoria: la si applica quando la si sceglie */
+  const nA=d.movimenti.filter(x=>x.chiave===m.chiave&&x.id!==m.id&&x.cat!==cat).length;
+  if(!confirm(`Applicare «${movLbl(cat)}» a tutti i movimenti di «${m.descr||m.tipo}»${nA?` (${nA} da cambiare)`:""} e a quelli futuri?\n\nRestano come sono solo i movimenti che hai impostato a mano uno per uno.\n\nOK = applica ora · Annulla = scelgo prima un'altra categoria dal menu (la casella resta spuntata e la scelta varrà per tutti)`))return;
+  movClassifica([{id:m.id,chiave:m.chiave,cat,ricorda:true}]);return;}
  if(t.classList&&t.classList.contains("mv-ric2")){const d=movLoad(),m=d.movimenti.find(x=>x.id===t.dataset.id);if(!m)return;
   if(t.checked){if(!m.cat){alert("Scegli prima la categoria dal menu.");t.checked=false;return;}
    movClassifica([{chiave:m.chiave,cat:m.cat,ricorda:true}]);return;}
