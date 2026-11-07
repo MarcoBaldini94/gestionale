@@ -80,7 +80,7 @@ function sanitize(s){
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","carburante","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
     mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
-    freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),da:/^\d{4}-\d{2}$/.test(t.da)?t.da:""}));
+    freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),da:/^\d{4}-\d{2}$/.test(t.da)?t.da:"",...(t.reale&&num(t.reale.anno)!=null&&num(t.reale.imp)!=null?{reale:{anno:t.reale.anno,imp:t.reale.imp}}:{})}));
   return o;
 }
 function load(src){const s0=(!src||typeof src!=="object")?defaults():sanitize(src.v>=3?src:migrate(src));return freezePaid(ensureYears(ensureRic(s0)));}
@@ -1911,8 +1911,9 @@ function applyLinks(){if(!Array.isArray(S.link))S.link=[];if(!S.linkMem)S.linkMe
   else if(r.lk){delete r.lk;r.pagato=false;r.importo=r.imp0!==undefined?r.imp0:r.importo;delete r.imp0;r.dataPag=paidOf(r)?SD(r):"";}});
  /* previsione (scelta di Marco): spese fisse annuali «variabili» → l'importo del modello diventa l'ultimo importo reale.
     Prima si fissano le righe passate senza importo proprio, così lo storico non cambia. */
- Object.entries(ultimo).forEach(([id,u])=>{const t=TPL[id];if(!t||!t.variabile||t.importo===u.imp)return;
-  S.scadenzario.forEach(r=>{if(r.ric===id&&r.importo==null&&paidOf(r))r.importo=t.importo;});t.importo=u.imp;});
+ /* solo quando cambia l'ultimo pagamento reale (t.reale): se poi Marco corregge a mano la previsione, resta la sua */
+ Object.entries(ultimo).forEach(([id,u])=>{const t=TPL[id];if(!t||(t.reale&&t.reale.anno===u.anno&&t.reale.imp===u.imp))return;t.reale={anno:u.anno,imp:u.imp};
+  if(!t.variabile||t.importo===u.imp)return;S.scadenzario.forEach(r=>{if(r.ric===id&&r.importo==null&&paidOf(r))r.importo=t.importo;});t.importo=u.imp;});
  /* 2. entrate senza cedolino */
  const grp={};L.filter(l=>l.k==="e").forEach(l=>{const ym=l.d.slice(0,7);if(cedCovers(ym,l.r))return;const g=grp[l.r+"|"+ym]=grp[l.r+"|"+ym]||{f:l.r,ym,v:0,n:0,d:""};g.v+=l.i;g.n++;if(l.d>g.d)g.d=l.d;});
  const cov=new Set(Object.keys(grp));
@@ -1948,7 +1949,8 @@ function linkCands(m,tutti){const out=[],a=Math.abs(m.importo),mem=(S.linkMem||{
    const imp=rows0[i]?rows0[i].imp:n(r.importo);let sc=0;
    if(mem&&mem.k==="s"&&((r.ric&&mem.r===r.ric)||(!r.ric&&mem.r===tipoOf(r))))sc=r.rm?(e.slice(0,7)===m.data.slice(0,7)?3.5:1):3;
    const tp=r.ric?(S.ricorrenti||[]).find(t=>t.id===r.ric):null;
-   if(imp>0&&Math.abs(imp-a)<=0.011)sc=Math.max(sc,2.6);else if(tp&&tp.variabile&&!r.rm&&imp>0&&Math.abs(imp-a)<=0.15*imp&&(m.cat==="fisse"||!m.cat))sc=Math.max(sc,1.4);
+   if(imp>0&&Math.abs(imp-a)<=0.011)sc=Math.max(sc,2.6);
+   else if(r.rm&&imp>0&&Math.abs(2*imp-a)<=0.011&&Math.abs(dd)<=20)sc=Math.max(sc,2.6); /* affitto pagato per due: metà torna come rimborso */else if(tp&&tp.variabile&&!r.rm&&imp>0&&Math.abs(imp-a)<=0.15*imp&&(m.cat==="fisse"||!m.cat))sc=Math.max(sc,1.4);
    if(sc||tutti)out.push({k:"s",rs:[r.id],sc:sc-Math.abs(dd)/400,lbl:scadLbl(r)});});
   /* F24 / delega con più voci: combinazioni di 2-4 tasse con scadenza a ±12 giorni che sommano l'importo */
   const tx=S.scadenzario.map((r,i)=>({r,i})).filter(({r})=>tipoOf(r)!=="spesa"&&SD(r)&&!occ.has(r.id)&&Math.abs(dDiff(SD(r),m.data))<=12);
