@@ -872,3 +872,24 @@ button.mst-t{cursor:pointer;opacity:.62;transition:opacity .15s,border-color .15
 .eschart-d svg{display:block;width:100%;height:auto}.eschart-d text{fill:var(--muted);font-size:11px;font-family:var(--f-mono)}
 .psub .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}.psub .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 #avg-box .mvpie{border:0;box-shadow:none;padding:4px 0;background:none}
+/* v41: Andamento unificato (dashboard + scheda): legenda con i totali dell'anno; ciambelle che aprono la tabella mese per mese */
+.andleg{display:grid;gap:8px;min-width:0}
+.andleg .pleg li.lg-h > i{visibility:hidden}
+.andleg .pleg li.lg-s{padding-left:14px;font-size:13px}
+.andleg .pleg li.lg-s > span{color:var(--muted)}
+.andleg .kv{border-top:1px solid var(--line);padding-top:4px}
+#es-box .andleg{margin-top:12px}
+#avg-box .avg-c{cursor:pointer;border-radius:12px;padding:6px 4px;transition:background .15s}
+#avg-box .avg-c:hover{background:var(--surface-2)}
+#avg-box .avg-c:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#avg-box .avg-c h3 .chev{display:inline-block;margin-left:6px;color:var(--muted);transition:transform .15s}
+#avg-box .avg-c.open h3 .chev{transform:rotate(90deg)}
+#avg-box .avg-c.open{background:var(--accent-soft)}
+#avg-box .avg-p{margin-top:0;border:1px solid var(--line);box-shadow:none}
+#avg-box .avg-p h3{font-size:14px}
+table.avgt th .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:0}
+table.avgt tr.nod-r td{color:var(--muted)}
+#avg-box .avg-g{grid-auto-flow:row dense}
+#avg-box .avg-g > .avg-p{grid-column:1/-1;min-width:0}
+@media (min-width:721px){#avg-box .avg-g > .avg-c{order:1}#avg-box .avg-g > .avg-p{order:2}}
+table.avgt td:first-child{white-space:nowrap}
