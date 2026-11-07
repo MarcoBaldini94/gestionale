@@ -886,3 +886,8 @@ table.avgt td:first-child{white-space:nowrap}
 /* v47 — mese con tasse maturate non coperte dal guadagno (avviso giallo, non «in rosso») */
 .banner.warn-b{border:1px solid var(--tasse);border-left-width:5px;background:color-mix(in srgb,var(--tasse) 12%,var(--surface));margin-bottom:14px}
 .banner.warn-b b:first-child{color:var(--t-tasse,var(--tasse))}
+
+/* v49: movimenti abbinati (acquisto ↔ rimborso) */
+.chip.mv-abb{color:var(--muted);font-weight:500;margin-top:2px}
+.chip.mv-abb .lnk,.mvleg-p .note .lnk{background:none;border:0;padding:0;font:inherit;text-decoration:underline;cursor:pointer;color:var(--link)}
+.mvr.abb .mvi{text-decoration:line-through;opacity:.6}

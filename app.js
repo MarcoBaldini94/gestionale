@@ -3,7 +3,7 @@
 /* ================= modello dati ================= */
 /* v46: versione dei dati scritta in ogni backup (S.appVer). Una copia dell'app più vecchia di quella che ha salvato
    l'ultimo backup sul PC non lo adotta e non lo sovrascrive (perderebbe i campi nuovi, es. i collegamenti): chiede di ricaricare. */
-const APP_VER=46;
+const APP_VER=49;
 const MESI=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const FONTI=[["lp","Libera professione","P.IVA forfettario"],["gm","Guardia medica","già tassata dall'ASL"],["ssn","Stipendio SSN","netto in busta"],["sond","Sondaggi","netto"],["spec","Borsa specializzazione","esente"],["ext","Entrate extra (dai conti)","dagli estratti conto"],["altro","Altro",""],["intra","Intramoenia / aggiuntiva","lordo dal cedolino, già nel netto SSN"]];
 const FONTI_Y=Y=>(+Y>=2027?["ssn","intra","sond","ext","altro"]:["lp","gm","ssn","intra","sond","spec","ext","altro"]).map(k=>FONTI.find(f=>f[0]===k));
@@ -22,7 +22,7 @@ const scadRow=(voce,anno,auto,frazione,scadenza)=>({id:uid(),voce,anno,auto:auto
 const isY=y=>/^\d{4}$/.test(String(y));
 
 function defaults(){const y=new Date().getFullYear();return{v:3,anni:{[y]:{...DEF_ANNO}},globali:{...DEF_GLOB},registro:[],patrimonio:{[y]:blankPat()},
-  chiusure:{},chiusureInv:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[],patEstrF:[],patEstrI:[],link:[],linkMem:{}};}
+  chiusure:{},chiusureInv:{},movAbbNo:[],fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[],patEstrF:[],patEstrI:[],link:[],linkMem:{}};}
 
 /* conversione dal formato del foglio (v1/v2): mesi → registro movimenti, parametri → tabella per anno */
 function migrate(o){
@@ -80,6 +80,7 @@ function sanitize(s){
   o.link=(Array.isArray(s.link)?s.link:[]).filter(l=>l&&typeof l==="object"&&typeof l.m==="string"&&["s","e","x"].includes(l.k)&&/^\d{4}-\d{2}-\d{2}$/.test(l.d||"")).map(l=>({m:l.m.slice(0,24),k:l.k,r:str(l.r).slice(0,40),d:l.d,i:num(l.i)??0,c:str(l.c).slice(0,20),t:str(l.t).slice(0,60)})).slice(-3000);
   o.linkMem={};if(s.linkMem&&typeof s.linkMem==="object")Object.entries(s.linkMem).forEach(([k,v])=>{if(k.length<=160&&v&&["s","e"].includes(v.k))o.linkMem[k]={k:v.k,r:str(v.r).slice(0,40)};});
   o.sondCanali={};if(s.sondCanali&&typeof s.sondCanali==="object")Object.entries(s.sondCanali).forEach(([k,v])=>{if(/^[a-z0-9_-]{1,48}$/.test(k)&&["banca","paypal","amazon"].includes(v))o.sondCanali[k]=v;});
+  o.movAbbNo=Array.isArray(s.movAbbNo)?[...new Set(s.movAbbNo.filter(x=>typeof x==="string"))].slice(-500):[];
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","carburante","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
     mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
@@ -1775,12 +1776,26 @@ async function movSync(manual,path,body){
    ripassavano tutti i movimenti più volte per mese (e sondMese rileggeva i sondaggi da localStorage a ogni chiamata).
    La memoria vale finché non cambiano gli estratti (MOV), i canali dei portali o i dati dei sondaggi. */
 let MEMO={k:null};
-function memo(){const k=(lsGet(SOND_LS_KEY)||"")+"|"+JSON.stringify(S.sondCanali||{});
+function memo(){const k=(lsGet(SOND_LS_KEY)||"")+"|"+JSON.stringify(S.sondCanali||{})+"|"+(S.movAbbNo||[]).join(",");
  if(MEMO.mov!==MOV||MEMO.k!==k)MEMO={mov:MOV,k,riep:{},pp:{},sond:{},mesi:null};return MEMO;}
 const movMesi=()=>{const d=movLoad();if(!d)return [];const M=memo();return M.mesi||(M.mesi=[...new Set(d.movimenti.map(m=>m.data.slice(0,7)))].sort());};
 function movRiep(ym){const M=(movLoad(),memo());if(M.riep[ym])return Object.assign({},M.riep[ym]);const o0=movRiep0(ym);M.riep[ym]=o0;return Object.assign({},o0);}
-function movRiep0(ym){const d=movLoad(),o={};MOV_CAT.forEach(([k])=>o[k]=0);o[""]=0;
- (d?d.movimenti:[]).filter(m=>m.data.startsWith(ym)).forEach(m=>{o[m.cat||""]=(o[m.cat||""]||0)+m.importo;});return o;}
+/* v49 (opzione 1 scelta da Marco): rimborso su carta ↔ acquisto. Un'entrata in una categoria di uscita (o di tipo
+   rimborso/storno/reso) si abbina al pagamento dello stesso conto e della stessa controparte (descrizione), stesso importo
+   (±1 cent), nei 60 giorni prima (il più vicino); i due si annullano e non entrano nei conteggi per categoria (il saldo
+   del conto non cambia). Caso reale: due addebiti a fine giugno rimborsati a inizio luglio → luglio con una categoria
+   in negativo (sparita dalla ciambella) e giugno gonfiato. S.movAbbNo = id dei rimborsi da NON abbinare («separa»). */
+const MOV_U=()=>MOV_CAT.filter(c=>c[2]==="u").map(c=>c[0]);
+const abbKey=m=>(m.conto||"")+"|"+String(m.descr||"").toLowerCase().replace(/\s+/g," ").trim();
+function movAbb(){const M=memo();if(M.abb)return M.abb;const d=movLoad(),out={};M.abb=out;if(!d)return out;
+ const U=MOV_U(),no=new Set(S.movAbbNo||[]),dd=(x,y)=>(Date.parse(x)-Date.parse(y))/864e5;
+ const refs=d.movimenti.filter(m=>m.importo>0&&!no.has(m.id)&&m.descr&&(U.includes(m.cat||"")||/rimbors|storno|reso/i.test(m.tipo||""))&&!["giro","escl","invest","rimb"].includes(m.cat||"")).sort((x,y)=>x.data.localeCompare(y.data));
+ const buy=d.movimenti.filter(m=>m.importo<0&&U.includes(m.cat||""));
+ refs.forEach(r=>{const k=abbKey(r);const c=buy.filter(p=>!out[p.id]&&abbKey(p)===k&&Math.abs(-p.importo-r.importo)<=0.011&&dd(r.data,p.data)>=0&&dd(r.data,p.data)<=60).sort((x,y)=>y.data.localeCompare(x.data))[0];
+  if(c){out[r.id]={p:c.id,ref:1,data:c.data};out[c.id]={p:r.id,ref:0,data:r.data};}});
+ return out;}
+function movRiep0(ym){const d=movLoad(),o={};MOV_CAT.forEach(([k])=>o[k]=0);o[""]=0;const AB=movAbb();
+ (d?d.movimenti:[]).filter(m=>m.data.startsWith(ym)&&!AB[m.id]).forEach(m=>{o[m.cat||""]=(o[m.cat||""]||0)+m.importo;});return o;}
 /* rimborsi spese condivise (v24, regola di Marco): prima la quota d'affitto (= importo delle spese fisse mensili
    «affitt…» in vigore quel mese, cioè la metà che paga l'altra persona) va tutta a «Casa e utenze»; il resto si divide
    in parti uguali tra le categorie che dividete (S.movCond), senza superare la spesa lorda di ciascuna (l'eccedenza
@@ -1954,7 +1969,7 @@ function linkCands(m,tutti){const out=[],a=Math.abs(m.importo),mem=(S.linkMem||{
    if(sc||tutti)out.push({k:"e",rs:[f],sc,lbl:"Entrata · "+l});});}
  return out.sort((x,y)=>y.sc-x.sc);}
 /* movimenti per cui proporre un collegamento */
-const linkable=m=>m&&m.cat!==undefined&&!LINK_NOCAT.includes(m.cat||"")&&(m.importo<0||m.cat==="stipendio");
+const linkable=m=>m&&!movAbb()[m.id]&&m.cat!==undefined&&!LINK_NOCAT.includes(m.cat||"")&&(m.importo<0||m.cat==="stipendio");
 const LINK_PROPCAT=["fisse","tasse","casa","straord","stipendio",""];
 function linkProp(m){if(!linkable(m)||!LINK_PROPCAT.includes(m.cat||"")||linkOf(m.id).length||linkNo(m.id))return null;const c=linkCands(m,false);return c.length&&c[0].sc>=1.2?c[0]:null;}
 function linkSet(m,k,rs){S.link=(S.link||[]).filter(l=>l.m!==m.id);
@@ -2014,7 +2029,8 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
  const riv=d.movimenti.filter(m=>m.rivedere&&m.data.startsWith(ym)),rivAll=d.movimenti.filter(m=>m.rivedere).length;
  const regK=new Set((d.regole||[]).map(r=>r.chiave)),pend=m=>MOV_PEND[m.id]||{};
  const nAn={};d.movimenti.forEach(m=>{if(m.chiave)nAn[m.chiave]=(nAn[m.chiave]||0)+1;});
- const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}" data-c="${m.cat||""}" data-q="${esc(((m.descr||"")+" "+(m.dett||"")+" "+m.tipo+" "+m.conto).toLowerCase())}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.carta?" · carta di credito":""}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${edit?"":linkTag(m)}${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
+ const abbT=m=>{const x=movAbb()[m.id];return x?`<span class="chip mv-abb" title="Abbinato: non entra nei conteggi">↔ ${x.ref?"rimborso del pagamento":"pagamento rimborsato"} del ${dIt(x.data).slice(0,5)} <button class="lnk" data-act="mov-sep" data-id="${x.ref?m.id:x.p}">separa</button></span> `:"";};
+ const riga=(m,edit)=>`<div class="mvr${m.importo>0?" in":""}${movAbb()[m.id]?" abb":""}" data-c="${m.cat||""}" data-q="${esc(((m.descr||"")+" "+(m.dett||"")+" "+m.tipo+" "+m.conto).toLowerCase())}"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)} · ${esc(m.tipo)}${m.carta?" · carta di credito":""}${m.orig==="regola"?" · regola":""}${m.orig==="scelta"?" · scelta tua":""}</small>${abbT(m)}${edit?"":linkTag(m)}${m.dett&&m.dett!==m.descr?`<em>${esc(m.dett)}</em>`:""}</span><span class="mvi">${fmt(m.importo,"sign")}</span>
   ${edit?`<span class="mve"><select class="in sel mv-cat" data-id="${m.id}" aria-label="Categoria">${opt(pend(m).cat!=null?pend(m).cat:(m.proposta||m.cat))}</select><label class="mvk" title="Usa la stessa categoria per i prossimi movimenti con questa controparte"><input type="checkbox" class="mv-ric" data-id="${m.id}" ${(pend(m).ric!=null?pend(m).ric:m.proposta!=="straord")?"checked":""}> sempre</label><button class="btn sm" data-act="mov-ok" data-id="${m.id}">✓</button></span>`
    :`<span class="mve"><select class="in sel mv-set" data-id="${m.id}" aria-label="Categoria">${opt(m.cat)}</select><label class="mvk" title="Spuntato: questa controparte ha una regola e i suoi movimenti si classificano da soli"><input type="checkbox" class="mv-ric2" data-id="${m.id}" ${regK.has(m.chiave)?"checked":""}> sempre${regK.has(m.chiave)&&m.orig==="scelta"?" <small>(eccezione)</small>":""}</label>${linkSel(m)}</span>`}</div>`;
  {const mn=MESE_L(ym).toLowerCase();
@@ -2022,13 +2038,15 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
   const ent=[["Stipendio",Math.max(o.stipendio||0,0),"c-ent","stipendio"],["Sondaggi",N.sv.tot,"c-etf","sond"],["Entrate extra",Math.max(o.extra||0,0),"c-liq","extra"],["Interessi conto deposito",vincInt(ym),"c-inv","vint"],["Extra via PayPal",N.ppx,"c-rev","ppx"]].filter(x=>x[1]>0.005);
   const tU=sum(usc.map(x=>x[1])),tE=sum(ent.map(x=>x[1]));
   /* v34: tocco su una voce della legenda = elenco dei movimenti del mese in quella categoria (pannello sotto la voce) */
-  const legList=(key,box)=>{const byC=c=>mv.filter(m=>(m.cat||"")===c);let L=[],nota="";
+  const AB=movAbb();
+  const legList=(key,box)=>{const byC=c=>mv.filter(m=>(m.cat||"")===c&&!AB[m.id]);let L=[],nota="";
    if(key==="sond"){L=[...byC("sondaggi"),...byC("paypal")];nota=`Il valore viene dall'app Guadagni: prelievi del mese ${fmt(N.sv.tot)} (banca ${fmt(N.sv.banca)}, PayPal ${fmt(N.sv.paypal)}, buoni Amazon ${fmt(N.sv.amazon)}). Sotto, gli accrediti arrivati sui conti da portali e PayPal (passaggi, non contati due volte).`;}
    else if(key==="ppx"){L=byC("paypal");nota=`Arrivato da PayPal oltre l'atteso dai sondaggi: ${fmt(N.ppx)}. Dettaglio del calcolo in «Sondaggi e PayPal».`;}
    else if(key==="amz"){nota=`Buoni Amazon prelevati nell'app Guadagni (${fmt(N.amz)}): non passano dai conti.`;}
    else if(key==="vint"){L=mv.filter(m=>/cashpark/i.test(m.tipo||""));nota=`Interessi netti del conto deposito vincolato arrivati alla scadenza: accredito − capitale (${fmt(vincAt(ymAdd(ym,-1)))}, da Patrimonio › Liquidità). Il capitale è un giroconto.`;}
    else{L=byC(key);if(box==="u"&&N.alloc[key])nota=`Spesa lorda ${fmt(-o[key])} − rimborsi ≈ ${fmt(N.alloc[key])} = ≈ ${fmt(-N.net[key])}.`;}
    L.sort((a,b)=>a.data.localeCompare(b.data));
+   {const ab=mv.filter(m=>AB[m.id]&&(m.cat||"")===key);if(ab.length)nota=(nota?nota+" ":"")+`Non contati perché abbinati (acquisto ↔ rimborso): ${ab.map(m=>`${esc(m.descr||m.tipo)} ${fmt(m.importo,"sign")} del ${dIt(m.data).slice(0,5)} ↔ ${AB[m.id].ref?"pagamento":"rimborso"} del ${dIt(AB[m.id].data).slice(0,5)}${AB[m.id].data.slice(0,7)!==ym?" "+MESE_L(AB[m.id].data.slice(0,7)).toLowerCase():""} <button class="lnk" data-act="mov-sep" data-id="${AB[m.id].ref?m.id:AB[m.id].p}">separa</button>`).join(" · ")}.`;}
    return `${nota?`<p class="note">${nota}</p>`:""}${L.length?`<div class="mvl-mini">${L.map(m=>`<div class="mvr-m${m.importo>0?" in":""}" data-act="mvrow" role="button" tabindex="0" aria-expanded="false" title="Tocca per cambiare categoria"><span class="mvd">${dIt(m.data).slice(0,5)}</span><span class="mvt"><b>${esc(m.descr||m.tipo)}</b><small>${esc(m.conto)}${m.dett&&m.dett!==m.descr?" · "+esc(m.dett):""}${m.orig==="regola"?" · regola":m.orig==="scelta"?" · scelta tua":""}</small></span><span class="mvi">${fmt(m.importo,"sign")}</span></div><div class="mvr-ed" hidden><label>Categoria <select class="in sel mv-set" data-ed="1" data-id="${m.id}" ${READONLY?"disabled":""}>${opt(m.cat)}</select></label>${(()=>{const nA=(nAn[m.chiave]||1)-1;return `<label class="mv-an-l"><input type="checkbox" class="mv-an" data-id="${m.id}" ${READONLY?"disabled":""}> Applica anche ${nA?`agli altri ${nA===1?"movimento":nA+" movimenti"} di «${esc(m.descr||m.tipo)}» in memoria`:`ai movimenti di «${esc(m.descr||m.tipo)}»`} e a quelli futuri</label>`;})()}${linkSel(m)?`<label>Collegato a ${linkSel(m)}</label>`:""}<small>${regK.has(m.chiave)?"Questa controparte ha già una regola. ":""}Con la casella spuntata la scelta diventa la regola della controparte (vale per tutti i suoi movimenti, tranne quelli impostati a mano uno per uno); senza, cambia solo questo movimento. Puoi spuntare la casella prima di scegliere, oppure dopo per estendere la categoria attuale.</small></div>`).join("")}</div><p class="mvl-tot">${L.length} ${L.length===1?"movimento":"movimenti"} · totale <b>${fmt(sum(L.map(m=>m.importo)),"sign")}</b></p>`:key==="amz"?"":`<p class="muted">Nessun movimento sui conti in questa categoria.</p>`}`;};
   const legLi=(box,tot)=>([l,v,c,key])=>li(c,l,v,tot).replace("<li>",`<li class="lk" data-act="mvleg" data-k="${box}-${key}" role="button" tabindex="0" aria-expanded="${MOV_LEG.has(box+"-"+key)}" title="Mostra i movimenti">`)+`<li class="mvleg-p" data-p="${box}-${key}" ${MOV_LEG.has(box+"-"+key)?"":"hidden"}>${legList(key,box)}</li>`;
   const card=(t,arr,tot,lab,box)=>`<div class="box mvpie"><h3>${t} <small>${mn}</small></h3><div class="mvpie-in">${donut(arr.map(x=>x.slice(0,3)),150,18,t+" di "+mn,1,tot,lab)}<ul class="pleg pleg-k">${arr.map(legLi(box,tot)).join("")||`<li><span class="muted">Nessun dato</span></li>`}</ul></div><p class="note mvleg-h">Tocca una voce per vedere i movimenti.</p></div>`;
@@ -2080,6 +2098,8 @@ view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']")
  const voce=id=>{const m=movLoad().movimenti.find(x=>x.id===id),s=document.querySelector(`.mv-cat[data-id="${id}"]`),r=document.querySelector(`.mv-ric[data-id="${id}"]`);
   return m&&s&&s.value?{id,chiave:m.chiave,cat:s.value,ricorda:!!(r&&r.checked)}:null;};
  if(a==="mov-ok"){const v=voce(b.dataset.id);if(!v){const s=document.querySelector(`.mv-cat[data-id="${b.dataset.id}"]`);if(s)s.focus();return;}movClassifica([v]);return;}
+ if(a==="mov-sep"){if(READONLY)return;const id=b.dataset.id;if(!id)return;S.movAbbNo=[...new Set([...(S.movAbbNo||[]),id])];
+  applyExtra();applyLinks();scheduleSave();render();return;}
  if(a==="mov-rdel"){const r=(movLoad().regole||[])[+b.dataset.ri];if(r&&confirm("Togliere la regola per «"+r.descr+"»?"))movClassifica([{chiave:r.chiave,cat:"",ricorda:true}]);return;}
  if(a==="mov-okall"){movClassifica([...document.querySelectorAll(".mv-cat")].map(s=>voce(s.dataset.id)).filter(Boolean));return;}});
 view.addEventListener("change",e=>{const t=e.target;
