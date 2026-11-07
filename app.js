@@ -1,6 +1,9 @@
 (function(){
 "use strict";
 /* ================= modello dati ================= */
+/* v46: versione dei dati scritta in ogni backup (S.appVer). Una copia dell'app più vecchia di quella che ha salvato
+   l'ultimo backup sul PC non lo adotta e non lo sovrascrive (perderebbe i campi nuovi, es. i collegamenti): chiede di ricaricare. */
+const APP_VER=46;
 const MESI=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const FONTI=[["lp","Libera professione","P.IVA forfettario"],["gm","Guardia medica","già tassata dall'ASL"],["ssn","Stipendio SSN","netto in busta"],["sond","Sondaggi","netto"],["spec","Borsa specializzazione","esente"],["ext","Entrate extra (dai conti)","dagli estratti conto"],["altro","Altro",""],["intra","Intramoenia / aggiuntiva","lordo dal cedolino, già nel netto SSN"]];
 const FONTI_Y=Y=>(+Y>=2027?["ssn","intra","sond","ext","altro"]:["lp","gm","ssn","intra","sond","spec","ext","altro"]).map(k=>FONTI.find(f=>f[0]===k));
@@ -66,8 +69,8 @@ function sanitize(s){
   o.fondo={capitale:num(s.fondo&&s.fondo.capitale)};o.etfBase=num(s.etfBase);
   o.scadenzario=(Array.isArray(s.scadenzario)?s.scadenzario:d.scadenzario).filter(r=>r&&typeof r==="object").map(r=>({id:str(r.id)||uid(),
     voce:str(r.voce),anno:num(r.anno),auto:AUTO_LBL[r.auto]?r.auto:"",tipo:["qa","qb","imp","spesa"].includes(r.tipo)?r.tipo:"",ric:str(r.ric),...(/^\d{4}-\d{2}$/.test(r.rm)?{rm:r.rm}:{}),frazione:num(r.frazione)??1,meno:num(r.meno)??0,importo:num(r.importo),scadenza:str(r.scadenza),pagato:r.pagato===true,forzaNonPagato:r.forzaNonPagato===true,dataPag:str(r.dataPag),...(Array.isArray(r.lk)&&r.lk.length?{lk:r.lk.filter(x=>typeof x==="string").slice(0,8),imp0:num(r.imp0)}:{})}));
-  o.accantonato=num(s.accantonato);
-  o.sondExt=s.sondExt&&/^\d{4}-\d{2}$/.test(s.sondExt.da)?{da:s.sondExt.da,a:/^\d{4}-\d{2}$/.test(s.sondExt.a)?s.sondExt.a:s.sondExt.da,fonte:str(s.sondExt.fonte),agg:str(s.sondExt.agg)}:null;
+  o.accantonato=num(s.accantonato);o.appVer=num(s.appVer)??0;
+  o.sondExt=s.sondExt&&/^\d{4}-\d{2}$/.test(s.sondExt.da)?{da:s.sondExt.da,a:/^\d{4}-\d{2}$/.test(s.sondExt.a)?s.sondExt.a:s.sondExt.da,fonte:"",agg:""}:null;
   o.ced=sanitizeCed(s.ced);
   o.cart=sanitizeCart(s.cart);
   o.prev={entrate:num(s.prev&&s.prev.entrate),spese:num(s.prev&&s.prev.spese),inv:num(s.prev&&s.prev.inv)};
@@ -83,7 +86,11 @@ function sanitize(s){
     freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),da:/^\d{4}-\d{2}$/.test(t.da)?t.da:"",...(t.reale&&num(t.reale.anno)!=null&&num(t.reale.imp)!=null?{reale:{anno:t.reale.anno,imp:t.reale.imp}}:{})}));
   return o;
 }
-function load(src){const s0=(!src||typeof src!=="object")?defaults():sanitize(src.v>=3?src:migrate(src));return freezePaid(ensureYears(ensureRic(s0)));}
+/* v45: ordine fisso del registro (data, fonte, id). Le righe automatiche (cedolini, conti, sondaggi, extra) venivano
+   accodate in ordine diverso a seconda di quale collegamento girava prima: due dispositivi con gli stessi dati
+   producevano JSON diversi e si rimandavano a vicenda il backup ogni pochi secondi (backup «ping-pong», 07/11/2026). */
+const regSort=s=>{s.registro.sort((a,b)=>(a.data||"").localeCompare(b.data||"")||(a.fonte||"").localeCompare(b.fonte||"")||String(a.id).localeCompare(String(b.id)));return s;};
+function load(src){const s0=(!src||typeof src!=="object")?defaults():sanitize(src.v>=3?src:migrate(src));return regSort(freezePaid(ensureYears(ensureRic(s0))));}
 /* passaggio d'anno: parametri dell'anno in corso e del successivo, tabella patrimonio dell'anno in corso,
    rate ENPAM (Quota A dell'anno, Quota B dell'anno prima) create una sola volta: se le cancelli non ricompaiono */
 function ensureYears(s){const cy=new Date().getFullYear();if(!Array.isArray(s.gen))s.gen=[];
@@ -261,7 +268,7 @@ function calc(s){
     const ent=sum(s.registro.filter(r=>r.data.startsWith(pref)&&IN_TOT(r.fonte)).map(r=>r.importo));
     const tas=sum(s.scadenzario.map((r,i)=>isF(r)&&paidOf(r)&&(PDt(r)||r.dataPag||"").startsWith(pref)?rows[i].imp:0));
     const fis=sum(s.scadenzario.map((r,i)=>!isF(r)&&paidOf(r)&&PDt(r).startsWith(pref)?rows[i].imp:0));
-    const aff=sum(s.scadenzario.map((r,i)=>!isF(r)&&isAff(r)&&paidOf(r)&&SD(r).startsWith(pref)?rows[i].imp:0));
+    const aff=sum(s.scadenzario.map((r,i)=>!isF(r)&&isAff(r)&&paidOf(r)&&PDt(r).startsWith(pref)?rows[i].imp:0));
     const prevD=m===0?o.prevClose:o.D[m-1];const ok=o.D[m]>0&&prevD>0;
     const inv=n(p[m].vEtf)+fondoFlow(s,Y,m),risp=ok?o.D[m]-prevD+inv:null;
     sv.ent.push(ok?ent:null);sv.inv.push(ok?inv:null);sv.risp.push(risp);sv.tasse.push(ok?tas:null);sv.fisse.push(ok?fis:null);sv.aff.push(ok?aff:null);
@@ -336,11 +343,7 @@ const kv=(label,val,cls="")=>`<dt class="${cls}">${label}</dt><dd class="${cls}"
 const allYears=()=>[...new Set([...yearsOf(S.anni),...yearsOf(S.patrimonio)])].sort((a,b)=>a-b);
 const yearBar=()=>`<div class="years" role="group" aria-label="Anno">${allYears().map(y=>`<button class="ybtn" data-act="year" data-y="${y}" ${y===UY?'aria-pressed="true"':""}>${y}</button>`).join("")}</div>`;
 
-const ICO={
- vault:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 20h18"/></svg>',
- cash:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/></svg>',
- receipt:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>',
- trend:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>'};
+
 
 /* ================= schede ================= */
 const TABS=[["home","Home"],["dashboard","Finanze"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],
@@ -352,7 +355,7 @@ const PARENT={dashboard:"home",lavoro:"home",sondaggi:"home",collegamenti:"home"
 const parentOf=t=>PARENT[t]||(t==="home"?null:"dashboard");
 const V={};
 
-V.dashboard=()=>{const PY=R.PY,TY=R.TY,c=`anni.${TY}`,pv=`anni.${TY-1}`;return `
+V.dashboard=()=>{const PY=R.PY;return `
 <section class="sheet">
  <div class="sheet-h"><h2>Dashboard finanziaria ${PY}</h2><p>Situazione all'ultimo mese compilato (${R.patr[PY]&&R.patr[PY].last>=0?MESI[R.patr[PY].last].toLowerCase():"—"} ${PY}).</p></div>
  <div id="empty-banner" class="banner" hidden>Nessun dato su questo dispositivo. Se li hai già, ripristinali dal PC o da un file in <a href="#collegamenti">Collegamenti e backup</a>. Altrimenti inserisci i saldi in <a href="#patrimonio">Patrimonio</a> e i movimenti in <a href="#entrate">Entrate</a>: i campi con il bordo colorato sono modificabili.</div>
@@ -394,12 +397,12 @@ V.scadenzario=()=>{
  const gy=Object.keys(groups).sort(),cy=String(new Date().getFullYear());
  if(SY==null||!gy.includes(SY))SY=gy.includes(cy)?cy:(gy[0]||cy);
  const ys=yearsOf(S.anni);
- const rifOpts=[`<option value=":">Altro</option>`,...ys.flatMap(y=>[["qa","Quota A"],["qb","Quota B"],["imp","Imposta sostitutiva"]].map(([t,l])=>`<option value="${t}:${y}">${l} ${y}</option>`))].join("");
- const MS=["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+ 
+ 
  const rows0=R.deb.rows;
  const idxs=(groups[SY]||[]).sort((a,b)=>(PDt(S.scadenzario[a])||"9").localeCompare(PDt(S.scadenzario[b])||"9"));
  const mOf=i=>{const e=PDt(S.scadenzario[i]);return e?+e.slice(5,7)-1:-1;};
- const nowYM=TODAY.slice(0,7),isY=/^\d{4}$/.test(SY);
+ const isY=/^\d{4}$/.test(SY);
  const fisseY=sum(idxs.filter(i=>S.scadenzario[i].ric).map(i=>rows0[i].imp));
  const card=(m,ids)=>scadCard(m>=0?`${SY}-${String(m+1).padStart(2,"0")}`:"",m>=0?MESI[m]:"Senza data",ids);
  let list="";
@@ -440,9 +443,9 @@ const donut=(segs0,sz,sw,label,center,cval,clab="totale",fv=null)=>{const F=fv||
   return `<svg viewBox="0 0 ${sz} ${sz}" width="${sz}" height="${sz}" role="img" aria-label="${label}" class="dn">${segs0.some(x=>x[2]==="negh")?`<defs><pattern id="hatch-neg" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--neg-soft)"/><rect width="3" height="6" fill="var(--neg)"/></pattern></defs>`:""}${center===true?`<defs><pattern id="hatch-pc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--c-liq)"/><rect width="3.2" height="6" fill="var(--c-tasse)"/></pattern></defs>`:""}<circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${sw}"/>${arcs}${center?`<text x="50%" y="${sz/2-2}" text-anchor="middle" class="pc1" style="font-size:${sz>140?17:13}px">${(cval!=null?cval:tot)?(fv?fv(cval!=null?cval:tot):fmt(Math.round(cval!=null?cval:tot)).replace(/,\d\d(?=\s|$)/,"")):"—"}</text><text x="50%" y="${sz/2+(sz>140?15:13)}" text-anchor="middle" class="pc2" style="font-size:${sz>140?11:10}px">${clab}</text>`:""}</svg>`;};
 const li=(c,l,v,t,fv)=>{const k=c==="taxh"?"tasse":c.replace(/^c-/,""),hx=c[0]==="#";return `<li><i style="${c==="taxh"?"background:repeating-linear-gradient(45deg,var(--c-tasse) 0 2.5px,var(--c-liq) 2.5px 5px)":hx?`background:${c}`:`background:var(--${c})`}"></i><span>${l}</span><b style="${hx?"color:var(--fg)":`color:var(--t-${k},var(--c-${k},var(--fg)))`}">${(fv||fmt)(v)}</b><em>${pc(v,t)}</em></li>`;};
 /* uso delle entrate: risparmio netto, tasse da accantonare, spese; l'affitto è separato dalle altre spese */
-const spSeg=x=>{const a=Math.max(n(x.aff),0);return [["Risparmio netto",x.rn,"c-risp"],["Da accantonare per tasse",x.acc,"c-tasse"],...(a>0?[["Affitto",a,"c-aff"],["Altre spese (vita + fisse)",n(x.spT)-a,"c-spese"]]:[["Spese (vita + fisse)",x.spT,"c-spese"]])];};
+
 /* entrate e uscite dell'anno: speso (affitto a parte), investito, surplus */
-const euSeg=x=>{const a=Math.max(n(x.aff),0);return [...(a>0?[["Affitto",a,"c-aff"],["Altro speso",n(x.sp)-a,"c-spese"]]:[["Speso",x.sp,"c-spese"]]),["Investito",x.inv,"c-inv"],["Surplus di liquidità",x.sur,"c-liq"]];};
+
 /* v41: legenda dell'Andamento (dashboard e scheda): totali dell'anno PY sui mesi con saldi */
 function andLeg(){const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const P=R.patr[R.PY]||{},Y=R.PY,e=x.ent;
  const sub=(c,l,v)=>li(c,l,v,e).replace("<li>",'<li class="lg-s">'),hd=li("c-spese","Uscite",x.sp,e).replace("<li>",'<li class="lg-h">');
@@ -457,10 +460,6 @@ function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  const liq=[["Fineco",g("fineco"),"c-fin"],["Revolut",g("revolut"),"c-rev"]],inv=[["Fondo Fineco",g("fondo"),"c-fondo"],["ETF Revolut",g("etf"),"c-etf"]];
  const rend=(v,p)=>`${out(v,"sign")} <small class="muted">${out(p,"pctS")}</small>`;
  const o=`patr.${Y}`;
- const rsp=(x,ttl,sub,mm)=>{if(!x||x.ent==null)return "";const ent=x.ent,sg=spSeg(x);
-  return mm?`<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${mm}" title="Apri il resoconto mensile"><h4>${ttl} <small>${sub}</small></h4>`+rspIn(x,ttl):`<a class="psub" href="#risparmio" data-act="go" data-tab="risparmio" title="Apri Andamento: patrimonio e risparmio mese per mese"><h4>${ttl} <small>${sub}</small></h4>`+rspIn(x,ttl);};
- const rspIn=(x,ttl)=>{const ent=x.ent,sg=spSeg(x);return `
-    <div class="psub-in">${donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),112,15,ttl,1,ent,"entrate")}<div><ul class="pleg">${sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("")}</ul></div></div></a>`;};
  return `<div class="box pcard"><h3>Composizione del patrimonio <small>a fine ${MESI[L].toLowerCase()} ${Y}</small></h3>
  <div class="pcard-in">
   <a class="pcard-main pmain" href="#patrimonio" data-act="go" data-tab="patrimonio" data-pt="rie" title="Apri Patrimonio · Riepilogo">${donut(main,170,26,"Composizione del patrimonio",true)}
@@ -512,8 +511,8 @@ V.patrimonio=()=>{
  const o=`patr.${Y}`,B=i=>`patrimonio.${Y}.${i}`;
  const tbl=(head,cells,tot)=>`<div class="tbl-wrap flat"><table class="pt" style="min-width:${110+head.length*118}px"><thead><tr><th>Mese</th>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${MESI.map((m,i)=>`<tr><td>${m}</td>${cells(i).map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")}${tot?`<tr class="tot"><td>${tot[0]}</td>${tot.slice(1).map(c=>`<td>${c}</td>`).join("")}</tr>`:""}</tbody></table></div>`;
  if(!["liq","inv","rie"].includes(PT))PT="liq";
- const P=R.patr[Y]||{},lastLbl=P.last>=0?MESI[P.last].toLowerCase():"—",isPY=Y===R.PY;
- const tile=(cls,l,v,sub)=>`<div class="tile ${cls}"><span class="l">${l}</span><span class="v">${v}</span>${sub?`<span class="s">${sub}</span>`:""}</div>`;
+ 
+ 
  const cy=[...new Set([...yearsOf(S.chiusure),Y-1])].sort((a,b)=>a-b);
  const tabs=[["liq","Liquidità"],["inv","Investimenti"],["rie","Riepilogo"]];
  const body={
@@ -609,11 +608,7 @@ function mesSum(ym){const Y=ym.slice(0,4),m=+ym.slice(5)-1,x=R.svAll&&R.svAll[Y]
  if(movMesi().includes(ym)){const N=movNetto(ym),inv=-(N.o.invest||0),usc=-(N.tu+N.R),ent=N.te,guad=ent-usc;return{ym,src:"mov",ent,inv,guad,usc,liq:guad-inv};}
  return null;}
 const mesiSum=()=>[...new Set([...monthsAvail(),...movMesi()])].sort();
-const colChart=(q,h)=>{const inv=Math.max(q.inv,0),top=Math.max(q.ent,q.usc+inv,1),p=v=>(Math.max(v,0)/top*100).toFixed(2)+"%",g=q.liq,
- seg=(cls,v,t,lab)=>v>0.005?`<i class="${cls}" style="height:${p(v)}" title="${t}: ${fmt(v)}">${lab&&v/top>.12?`<b>${lab}</b>`:""}</i>`:"";
- return `<div class="mcol" style="height:${h}px" role="img" aria-label="Entrate ${fmt(q.ent)}; uscite ${fmt(q.usc)}; investito ${fmt(inv)}; ${g>=0?"guadagno":"perdita"} ${fmt(Math.abs(g))}">
-  <div class="mc-c"><div class="mc-b">${seg("mc-ent",q.ent,"Entrate")}${g<0?seg("mc-loss",-g,"Perdita del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Entrate</span></div>
-  <div class="mc-c"><div class="mc-b">${seg("mc-usc",q.usc,"Uscite")}${seg("mc-inv",inv,"Investito")}${g>0?seg("mc-gain",g,"Guadagno del mese",fmt(g,"sign").replace(/,\d\d(?=\s|$)/,"")):""}</div><span>Uscite + investito</span></div></div>`;};
+
 const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<div class="mleg"><ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}</ul><dl class="kv mleg-kv">${kv(g>=0?"Guadagno del mese <small>rimasto sui conti</small>":"Perdita del mese <small>presa dai conti</small>",`<span class="${g<0?"neg":"pos"}">${fmt(g,"sign")}</span>`,"strong")}${kv("Guadagno complessivo <small>guadagno + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`)}${q.ent>0?kv("Tasso di risparmio",fmt(q.guad/q.ent,"pct1")):""}</dl></div>`;};
 /* chip della dashboard: unico collegamento al Resoconto mensile */
 function riepPsub(){const L=mesiSum();let q=null;for(let i=L.length-1;i>=0&&!q;i--)q=mesSum(L[i]);if(!q)return "";const mn=MESE_L(q.ym).toLowerCase();
@@ -622,8 +617,8 @@ function riepPsub(){const L=mesiSum();let q=null;for(let i=L.length-1;i>=0&&!q;i
 
 /* grafico a colonne mese per mese (v32): scala comune con asse y, mese scelto al centro, mese prima e dopo ai lati;
    cambiando mese la striscia scorre (MCH_AT = mese al centro nell'ultimo render). */
-let MCH_AT=null;
-const niceStep=v=>{const p=10**Math.floor(Math.log10(v)),r=v/p;return (r<=1?1:r<=2?2:r<=2.5?2.5:r<=5?5:10)*p;};
+
+
 const fInt=v=>new Intl.NumberFormat("it-IT",{maximumFractionDigits:0,useGrouping:"always"}).format(v);
 /* v40: barre orizzontali di un mese (Resoconto e dashboard) e fondo scala annuo (regola di Marco: valore più alto
    dell'anno tra entrate e uscite + investito, arrotondato per eccesso al migliaio) */
@@ -636,19 +631,19 @@ const mhbHTML=(q,top)=>{const pm=v=>(Math.max(v,0)/top*100).toFixed(2)+"%";retur
 function mchHTML(L,k){
  /* v37 (opzione D scelta da Marco): in alto i tre mesi (prima · scelto · dopo) in miniatura, da toccare; sotto il mese
     scelto a barre orizzontali con gli importi. Scala comune a tutti i mesi. Il guadagno è solo in numeri. */
- const Q=L.map(mesSum),mx=Math.max(1,...Q.filter(Boolean).map(q=>Math.max(q.ent,Math.max(q.usc,0)+Math.max(q.inv,0))));
- const st=niceStep(mx/2),top=Math.ceil(mx/st-1e-9)*st,pc=v=>(Math.max(v,0)/top*100).toFixed(2)+"%";
+ const Q=L.map(mesSum);
+ 
  const MH=38,topOf=Y=>Math.max(1000,Math.ceil(Math.max(0,...L.map((ym,i)=>ym.slice(0,4)===Y&&Q[i]?Math.max(Q[i].ent,Math.max(Q[i].usc,0)+Math.max(Q[i].inv,0)):0))/1000-1e-9)*1000);
  const tile=i=>{const ym=L[i],q=Q[i];if(ym==null)return `<span class="mst-t mst-void" aria-hidden="true"></span>`;
   const m=MESI[+ym.slice(5)-1],sel=i===k,g=q?q.liq:null,tY=topOf(ym.slice(0,4)),hp=v=>(Math.max(v,0)/tY*MH).toFixed(1)+"px";
   const mini=q?`<span class="mst-mini" aria-hidden="true"><span><i class="mc-ent" style="height:${hp(q.ent)}"></i></span><span><i class="mc-usc" style="height:${hp(q.usc)}"></i><i class="mc-inv" style="height:${hp(q.inv)}"></i></span></span>`:`<span class="mst-mini"></span>`;
   const inner=`${mini}<b>${m.slice(0,3)} <small>${ym.slice(0,4)}</small></b><em class="${g==null?"":g<0?"neg":"pos"}">${g==null?"—":fmt(Math.round(g),"sign").replace(/,\d\d(?=\s|$)/,"")}</em>`;
   return sel?`<span class="mst-t sel" aria-current="true">${inner}</span>`:`<button class="mst-t" data-act="mm" data-mm="${ym}" aria-label="Vai a ${m.toLowerCase()} ${ym.slice(0,4)}">${inner}</button>`;};
- const q=Q[k];MCH_AT=L[k];
+ const q=Q[k];
  /* v39 (regola di Marco): fondo scala = valore più alto dell'anno del mese scelto (entrate o uscite + investito),
     arrotondato per eccesso al migliaio; vale per le barre e per le miniature di tutti i mesi di quell'anno */
  const Yk=L[k].slice(0,4),topY=Math.max(1000,Math.ceil(Math.max(0,...L.map((ym,i)=>ym.slice(0,4)===Yk&&Q[i]?Math.max(Q[i].ent,Math.max(Q[i].usc,0)+Math.max(Q[i].inv,0)):0))/1000-1e-9)*1000);
- const topM=topY,pm=v=>(Math.max(v,0)/topM*100).toFixed(2)+"%";
+ const topM=topY;
  const bars=q?mhbHTML(q,topM):`<p class="muted">Nessun dato per questo mese.</p>`;
  return `<div class="mch2 mch-vp" role="group" aria-label="Entrate e uscite: ${MESE_L(L[k])}"><div class="mst">${tile(k-1)}${tile(k)}${tile(k+1)}</div>${bars}</div>`;}
 let MM=null;
@@ -665,19 +660,14 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
  const navH=`<div class="mnav" role="group" aria-label="Scegli il mese">${nav(-1,"Mese precedente","‹")}<select class="in sel mm-sel" id="mm-sel" aria-label="Mese">${opts}</select>${nav(1,"Mese successivo","›")}</div>`;
 
  const mp={},mb=movBody(MM,mp),hasR=LR.includes(MM),q=mesSum(MM),mn=MESE_L(MM).toLowerCase();
- let resPie="",resAltri="",negB="",nota="";
+ let resAltri="",negB="";
  if(hasR){const Y=MM.slice(0,4),m=+MM.slice(5)-1,x=R.svAll[Y],g=k=>x[k][m],ent=g("ent");
-  const sg=spSeg({rn:g("rn"),acc:g("acc"),spT:g("spT"),aff:g("aff")}),affM=Math.max(n(g("aff")),0);
+  const affM=Math.max(n(g("aff")),0);
   const neg=g("rn")<0,usc=Math.max(g("spT")||0,0)+Math.max(g("acc")||0,0),def=neg?-g("rn"):0;
-  const dn=neg
-   ?donut([["Coperte dalle entrate",Math.max(ent,0),"c-ent"],["Prese dai risparmi",def,"negh"]],150,18,"Uscite di "+mn,1,-def,"dai risparmi",v=>fmt(Math.round(v),"sign").replace(/,\d\d(?=\s|$)/,"")).replace('class="pc1" style="','class="pc1" style="fill:var(--neg);')
-   :donut(sg.map(([l,v,c])=>[l,Math.max(v||0,0),c]),150,18,"Uso delle entrate · "+mn,1,ent,"entrate").replace('class="pc1" style="','class="pc1" style="fill:var(--t-ent);');
-  const leg=neg?`${affM>0?li("c-aff","Affitto",affM,usc)+li("c-spese","Altre spese (vita + fisse)",(g("spT")||0)-affM,usc):li("c-spese","Spese (vita + fisse)",g("spT")||0,usc)}${li("c-tasse","Da accantonare per tasse",g("acc")||0,usc)}${li("neg","Non coperto dalle entrate",def,usc)}`:sg.map(([l,v,c])=>li(c,l,v||0,ent)).join("");
-  resPie=`<div class="box mvpie${neg?" neg-box":""}"><h3>${neg?"Uscite":"Uso delle entrate"} <small>${mn}</small></h3><div class="mvpie-in">${dn}<ul class="pleg">${leg}</ul></div></div>`;
   negB=neg?`<div class="banner neg-b"><b>Mese in rosso</b>: le uscite (${fmt(usc)}) hanno superato le entrate (${fmt(ent)}) di <b>${fmt(def)}</b>, presi dai risparmi.${g("risp")<0?` La liquidità è scesa di ${fmt(-g("risp"))}.`:` La liquidità non è scesa (${fmt(g("risp"),"sign")}) solo perché le tasse da accantonare non sono ancora state pagate.`}</div>`:"";
   const ya=R.ytdAll[Y],avg=ya&&ya.n?ya.ent/ya.n:null;
   resAltri=kv("Da accantonare per tasse <small>maturate sulle entrate del mese</small>",`<span class="nt-tasse">${fmt(g("acc")||0)}</span>`)+kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)+kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+(affM>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(affM)}</span>`):"")+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
- const qG=q?kv("Guadagno complessivo <small>guadagno del mese + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`,"strong"):"";
+ 
  const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${mchHTML(L,k)}${colLeg(q)}</div>
   <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} In alto il mese scelto e quelli accanto (toccali o scorri per cambiare mese); fondo scala = valore più alto dell'anno (entrate o uscite + investito), arrotondato al migliaio, uguale per tutti i mesi dell'anno. La differenza tra le due barre è il guadagno (o la perdita) del mese, indicato sotto.</p></div>`:"";
  /* v34: confronto entrate registrate (grafico in alto, fonte resoconto) e entrate dai conti (ciambella «Entrate») */
@@ -713,7 +703,7 @@ V.entrate=()=>{
  const today=TODAY;
  return `<section class="sheet">
  <div class="sheet-h"><h2>Entrate ${Y}</h2>${yearBar()}<p>${+Y>=2027?"Dal 2027 restano stipendio SSN e sondaggi, più «Altro» per le entrate occasionali (rimborso IRPEF, rimborsi spese, regali…). Lo stipendio è il netto in busta, tutto compreso: contiene già intramoenia e prestazioni aggiuntive. Il loro lordo, che serve solo per la Quota B ENPAM, si inserisce nella scheda Tasse.":"Un unico registro di movimenti: data di incasso, fonte, importo. Solo la libera professione entra nel forfettario, per cassa. Lo stipendio SSN è il netto in busta, tutto compreso (anche intramoenia e aggiuntive); il loro lordo per la Quota B ENPAM si inserisce nella scheda Tasse."}</p></div>
- ${sondNote()}
+ ${sondNote()}${contiWarn(Y)}
  ${cedNote()}
  <p class="note">Scrivi il totale del mese direttamente nella cella della fonte: lo stipendio netto dal cedolino. Le celle con più movimenti (es. più fatture nello stesso mese) si modificano nell'elenco dettagliato in fondo.</p>
  <details class="more"><summary>Aggiungi un singolo movimento con data e nota</summary>
@@ -787,7 +777,7 @@ const calcOpen=t=>`<details class="calc" id="calc-det" ${CALC_OPEN?"open":""}><s
 V.tasse=()=>{
  const Y=UY,T=R.anni[Y],c=`anni.${Y}`;
  if(!T)return `<section class="sheet"><div class="sheet-h"><h2>Tasse</h2>${yearBar()}</div><div class="banner">Mancano i parametri del ${Y}. <button class="btn" data-act="add-anno" data-y="${Y}" ${READONLY?"disabled":""}>Aggiungi parametri ${Y}</button></div></section>`;
- if(+Y>=2027){let rows="";MESI.forEach((m,i)=>{rows+=`<tr><td>${m}</td><td>${out(`${c}.mm.intra.${i}`,"eur","lnk")}</td><td>${out(`${c}.cumI.${i}`)}</td><td>${out(`${c}.ytd.qb.${i}`,"eur","tax")}</td></tr>`;});
+ if(+Y>=2027){
   return `<section class="sheet">
  ${taxPayBox()}
  <div class="sheet-h"><h2>Contributi ${Y} · ENPAM</h2>${yearBar()}<p>Quota A e Quota B ENPAM: i valori da inserire sono solo i lordi di intramoenia e aggiuntive qui sotto.</p></div>
@@ -812,7 +802,7 @@ V.tasse=()=>{
  </div>
  </div></details>
 </section>`;}
- let ytd="";MESI.forEach((m,i)=>{ytd+=`<tr><td>${m}</td><td>${out(`${c}.ytd.lp.${i}`,"eur","lnk")}</td><td>${out(`${c}.ytd.cum.${i}`)}</td><td>${out(`${c}.ytd.imponibile.${i}`)}</td><td>${out(`${c}.ytd.qa.${i}`,"eur","tax")}</td><td>${out(`${c}.ytd.qb.${i}`,"eur","tax")}</td><td>${out(`${c}.ytd.imp.${i}`,"eur","tax")}</td><td>${out(`${c}.ytd.h.${i}`,"eur","tax")}</td><td>${out(`${c}.ytd.i.${i}`)}</td></tr>`;});
+
  const sens=T.sens.map((x,j)=>`<tr class="${x.sel?"hl":""}"><td>${fN.format(x.k)} / ${fN.format(+(12-x.k).toFixed(2))}${x.sel?' <span class="chip auto">impostato</span>':""}${x.k===0?' <span class="muted">aliquota piena su tutto</span>':""}</td><td>${out(`${c}.sens.${j}.aliq`,"pct")}</td><td>${out(`${c}.sens.${j}.qb`,"eur","tax")}</td></tr>`).join("");
  return `<section class="sheet">
  ${taxPayBox()}
@@ -919,17 +909,7 @@ function svTable(){const sv=R.sv,PY=R.PY;if(!sv)return "";
   <div class="svt-bar"><div class="seg sm" role="tablist" aria-label="Colonne">${[["sint","Sintesi"],["det","Dettaglio"]].map(([v,l])=>`<button class="segb" data-act="svv" data-v="${v}" aria-selected="${v===SVV}">${l}</button>`).join("")}</div><span class="muted svt-h">${det?"Scorri di lato per tutte le colonne · ":""}Tocca un mese per il resoconto</span></div>
   <div class="tbl-wrap flat"><table class="sv2${det?" det":""}"><thead>${head}</thead><tbody>${rows}</tbody>
   <tfoot><tr class="tot"><td>Totale<small class="yr"> ${PY}</small></td>${tot.map(x=>`<td>${x}</td>`).join("")}<td></td></tr><tr class="avg"><td>Media<span class="mfull"> mensile</span> <small>${k} ${k===1?"mese":"mesi"}</small></td>${med.map(x=>`<td>${x}</td>`).join("")}<td></td></tr></tfoot></table></div></details>`;}
-function svChart(){
- const el=document.getElementById("svchart");if(!el||!R.sv)return;const V=R.sv.risp;
- const W=660,H=200,L=52,Rm=12,T=14,B=24,pw=W-L-Rm,ph=H-T-B,slot=pw/12,bw=Math.min(26,slot*.6);
- const mx=Math.max(1000,...V.map(v=>Math.abs(n(v))));const top=Math.ceil(mx/1000)*1000;
- const mn=Math.min(0,...V.map(n)),bot=mn<0?-Math.ceil(-mn/1000)*1000:0;
- const y=v=>T+ph-((v-bot)/(top-bot))*ph;
- let g="";for(let v=bot;v<=top;v+=1000*Math.max(1,Math.round((top-bot)/4000)))g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" ${v?'stroke-dasharray="3 4"':''}/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${fN.format(v/1000)}k</text>`;
- let bs="";MESI.forEach((m,i)=>{const cx=L+slot*i+slot/2;g+=`<text x="${cx}" y="${H-6}" text-anchor="middle">${m.slice(0,3)}</text>`;const v=V[i];if(v==null)return;
-  bs+=`<rect x="${cx-bw/2}" y="${v>=0?y(v):y(0)}" width="${bw}" height="${Math.max(1,Math.abs(y(v)-y(0)))}" rx="3" style="fill:var(${v>=0?"--good":"--spese"})"><title>${m}: ${fmt(v,"sign")} (${fmt(R.sv.tasso[i],"pct1")})</title></rect>`;});
- const av=R.sv.m3.risp;const al=av!=null?`<line x1="${L}" x2="${W-Rm}" y1="${y(av)}" y2="${y(av)}" style="stroke:var(--muted)" stroke-width="1.5" stroke-dasharray="6 4"/>`:"";
- el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Risparmio mensile">${g}${bs}${al}</svg>`;}
+
 function pvChart(){
  const el=document.getElementById("pvchart");if(!el||!R.pv)return;const M=R.pv.mesi;
  if(R.pv.ent==null||R.pv.spe==null){el.innerHTML='<p class="note">Servono almeno un paio di mesi di saldi ed entrate per stimare entrate e spese, oppure inseriscile qui sotto.</p>';return;}
@@ -946,38 +926,11 @@ function pvChart(){
   bs+=`<rect x="${cx-bw/2}" y="${x.net>=0?y(x.net):y(0)}" width="${bw}" height="${Math.max(h,1)}" rx="3" style="fill:var(${x.net>=0?"--good":"--tax"})"><title>${x.lbl}: ${fmt(x.net,"sign")} (tasse ${fmt(x.fiscT)}, spese fisse ${fmt(x.fisse)})</title></rect>`;
   g+=`<text x="${cx}" y="${H-8}" text-anchor="middle">${x.lbl}</text>`;pts.push(`${cx.toFixed(1)},${ly(x.liq).toFixed(1)}`);});
  const line=`<polyline points="${pts.join(" ")}" fill="none" style="stroke:var(--liq)" stroke-width="2.5" stroke-linejoin="round"/>`;
- const last=M[M.length-1],lx=L+slot*11+slot/2;
+ const last=M[M.length-1];
  const lab=`<text x="${W-Rm+4}" y="${ly(last.liq)+4}" style="fill:var(--liq-t);font-weight:600">${Math.round(last.liq/1000)}k</text><text x="${W-Rm+4}" y="${ly(M[0].liq)+4}" style="fill:var(--liq-t)">${Math.round(M[0].liq/1000)}k</text>`;
  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Previsione di cassa">${g}${bs}${line}${lab}</svg>`;
 }
-function chart(){
- const el=document.getElementById("chart");if(!el)return;const P=R.patr[R.PY];
- const idx=P?P.D.map((d,i)=>d>0?i:-1).filter(i=>i>=0):[];
- if(!idx.length){el.innerHTML='<p class="note">Il grafico compare quando inserisci almeno un saldo mensile.</p>';return;}
- const W=Math.max(480,Math.round(el.clientWidth||660)),H=280,L=46,Rm=12,T=18,B=26,pw=W-L-Rm,ph=H-T-B;
- const maxV=Math.max(...idx.map(i=>P.I[i]));
- const raw=maxV/4,mag=Math.pow(10,Math.floor(Math.log10(raw||1))),step=[1,2,2.5,5,10].map(k=>k*mag).find(s=>s>=raw);
- const top=Math.ceil(maxV/step)*step||1,y=v=>T+ph-(v/top)*ph,slot=pw/12,bw=Math.min(30,slot*0.58);
- let g="";
- for(let v=0;v<=top+1e-9;v+=step){g+=`<line x1="${L}" x2="${W-Rm}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" stroke-width="1" ${v>0?'stroke-dasharray="3 4"':''}/><text x="${L-8}" y="${y(v)+4}" text-anchor="end">${Math.round(v/1000)}k</text>`;}
- let bs="",pts=[];
- MESI.forEach((m,i)=>{const cx=L+slot*i+slot/2;g+=`<text x="${cx}" y="${H-8}" text-anchor="middle">${m.slice(0,3)}</text>`;
-  if(P.D[i]>0){const d=P.D[i],h=n(P.H[i]),x=cx-bw/2;
-   bs+=`<rect x="${x}" y="${y(d)}" width="${bw}" height="${y(0)-y(d)}" fill="url(#gL)"><title>${m}: liquido ${fmt(d)}</title></rect>`;
-   if(h>0)bs+=`<rect x="${x}" y="${y(d+h)}" width="${bw}" height="${y(d)-y(d+h)}" rx="3" style="fill:var(--inv)"><title>${m}: investimenti ${fmt(h)}</title></rect>`;
-   pts.push([cx,y(P.K[i]),P.K[i],i]);}});
- let area="",line="";
- if(pts.length>1){const p=pts.map(q=>q[0].toFixed(1)+","+q[1].toFixed(1)).join(" ");
-  area=`<polygon points="${pts[0][0]},${y(0)} ${p} ${pts[pts.length-1][0]},${y(0)}" fill="url(#gN)"/>`;
-  line=`<polyline points="${p}" fill="none" style="stroke:var(--good)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;}
- const last=pts[pts.length-1];
- const dots=pts.map((q,k)=>`<circle cx="${q[0]}" cy="${q[1]}" r="${k===pts.length-1?5:3}" style="fill:var(--surface);stroke:var(--good)" stroke-width="2"><title>${MESI[q[3]]}: netto ${fmt(q[2])}</title></circle>`).join("");
- const lab=last?`<text x="${last[0]}" y="${y(P.I[last[3]])-9}" text-anchor="middle" style="fill:var(--good);font-weight:600">${fmt(last[2]).replace(/,\d\d\s?€/," €")}</text>`:"";
- el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Patrimonio mensile"><defs>
- <linearGradient id="gL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--liq)"/><stop offset="1" style="stop-color:var(--liq);stop-opacity:.55"/></linearGradient>
- <linearGradient id="gN" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--good);stop-opacity:.16"/><stop offset="1" style="stop-color:var(--good);stop-opacity:0"/></linearGradient></defs>
- ${g}${area}${bs}${line}${dots}${lab}</svg>`;
-}
+
 
 /* ================= rendering e binding ================= */
 let current="dashboard";
@@ -1009,14 +962,14 @@ function updateOutputs(){
  if(R.tp&&TPY&&R.tp.byYear[TPY]&&document.getElementById("tpbar")){const Y=R.tp.byYear[TPY];bars("tpbar",[Y.pag,Y.res]);}
  if(C&&R.comp)bars("taxbar",["qa","qb","imp"].flatMap(k=>[R.comp[k].pag,R.comp[k].res]));
  document.querySelectorAll("[data-w]").forEach(el=>{const o=getP(R,el.dataset.w);const r=o&&o.tot>0?Math.min(o.res/o.tot*100,100):0;el.children[0].style.width=(o&&o.tot>0?100-r:0)+"%";el.children[1].style.width=r+"%";});bars("invbar",[R.dash.fondo,R.dash.etf]);bars("liqbar",[R.dash.fineco,R.dash.revolut]);
- {const y=R.deb.curY,pg=R.deb.perAnnoFP[y]||0,tt=R.deb.perAnnoFT[y]||0;bars("taxcurbar",[pg,Math.max(tt-pg,0)]);const el=document.getElementById("taxcurpct");if(el)el.textContent=tt>0?Math.round(pg/tt*100)+"%":"—";}chart();pvChart();svChart();esChart();esChart("eschart-d");
+ {const y=R.deb.curY,pg=R.deb.perAnnoFP[y]||0,tt=R.deb.perAnnoFT[y]||0;bars("taxcurbar",[pg,Math.max(tt-pg,0)]);const el=document.getElementById("taxcurpct");if(el)el.textContent=tt>0?Math.round(pg/tt*100)+"%":"—";}pvChart();esChart();esChart("eschart-d");
 }
 function render(){
  TODAY=new Date().toLocaleDateString("sv-SE");
  let h=(location.hash||"").slice(1).split("?")[0];if(h==="movimenti")h="mese";current=TABS.some(t=>t[0]===h)?h:"home";
  R=calc(S);if(UY==null||!allYears().includes(UY))UY=R.PY;
  renderTabs();if(current==="sondaggi"&&document.getElementById("sv-frame"))return; // l'app sondaggi resta aperta com'è
- document.getElementById("view").innerHTML=V[current]();if(current==="sondaggi")svFrameInit();if(current==="mese")movFiltra();psubInit();fillInputs(true);updateOutputs();
+ document.getElementById("view").innerHTML=(OLD_APP?`<div class="banner neg-b"><b>App da aggiornare.</b> L'ultimo backup sul PC è stato salvato da una versione più nuova del Gestionale (v${OLD_APP}; questa è la v${APP_VER}). Per non perdere dati questa copia non manda backup finché non la aggiorni. <button class="btn sm" data-act="reload">Ricarica l'app</button></div>`:"")+V[current]();if(current==="sondaggi")svFrameInit();if(current==="mese")movFiltra();psubInit();fillInputs(true);updateOutputs();
 }
 /* sotto-sezioni della scheda principale: chiuse di default; 1° tocco apre, 2° tocco apre la scheda; la freccia richiude */
 const PSOPEN=new Set();
@@ -1171,7 +1124,7 @@ const hasRealData=s=>s.registro.some(r=>!r.ext)||Object.values(s.patrimonio).som
 let timer=null,dirty=false;
 function scheduleSave(){dirty=true;status("busy","Modifiche in corso…");clearTimeout(timer);timer=setTimeout(save,600);}
 function save(){
- clearTimeout(timer);dirty=false;
+ clearTimeout(timer);dirty=false;if(!(S.appVer>APP_VER))S.appVer=APP_VER;
  const agg=new Date().toISOString();
  if(lsSet(LS_KEY,JSON.stringify(S))){lsSet(LS_AGG,agg);status("ok","Salvato alle "+hhmm(agg));scheduleHub();}
  else status("err","Salvataggio non riuscito: scarica un backup su file");
@@ -1197,12 +1150,13 @@ let hubBusy=false,hubTimer=null;
    in quel momento). Se sì: dati locali non modificati -> si adotta la versione del PC; modificati -> si chiede.
    Evita che un dispositivo rimasto indietro sovrascriva il PC con dati vecchi (successo il 05/11/2026). */
 const canon=o=>JSON.stringify(o,(k,v)=>v&&typeof v==="object"&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
-let hubPullBusy=false;
+let hubPullBusy=false,OLD_APP=0;
 async function hubPull(){
  if(hubPullBusy||!hubUrl())return;hubPullBusy=true;
  try{const el=await hubFetch("/api/"+HUB_APP+"/backup/elenco"),latest=(el&&el.file||[])[0],st=hubState();
   if(!latest||latest===st.base)return;
   const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");if(!r||!r.dati)return;
+  if(+r.dati.appVer>APP_VER){if(!OLD_APP){OLD_APP=+r.dati.appVer;status("err","App da aggiornare: ricarica la pagina");render();}return;}
   let H;try{H=load(fromAnyBackup(r));}catch(e){return;}
   const hHub=await sha(canon(H)),hLoc=await sha(canon(S));
   if(hHub===hLoc){setHubState({base:r.file,syncHash:hLoc});return;}
@@ -1217,8 +1171,8 @@ async function hubPull(){
  catch(e){/* PC non raggiungibile: si riprova alla prossima occasione */}
  finally{hubPullBusy=false;}}
 async function hubSync(force){
- if(hubBusy||!hubUrl()||!hasRealData(S))return;
- await hubPull();
+ if(hubBusy||!hubUrl()||!hasRealData(S)||OLD_APP)return;
+ await hubPull();if(OLD_APP)return;
  const body=JSON.stringify(S),h=await sha(body);
  if(!force&&hubState().lastHash===h)return;
  hubBusy=true;linkMsg("hub","Invio del backup al PC…");
@@ -1255,8 +1209,10 @@ function applySond(src){
  const add=keys.filter(ym=>tot[ym]>0).map(ym=>{const [y,m]=ym.split("-").map(Number);
   return{id:"sond-"+ym,data:`${ym}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`,fonte:"sond",importo:tot[ym]/100,nota:"Prelievi dall'app Guadagni sondaggi",ext:"guadagni"};});
  const nuovo={...S,registro:[...keep,...add],sondExt:{da,a,fonte:src.fonte,agg:new Date(src.t||Date.now()).toISOString()}};
- if(sig(nuovo)===prima){if(S.sondExt){S.sondExt.fonte=src.fonte;S.sondExt.agg=nuovo.sondExt.agg;}return false;}
- S.registro=nuovo.registro;S.sondExt=nuovo.sondExt;
+ setSondState({agg:nuovo.sondExt.agg,fonteDati:src.fonte});
+ /* v45: con gli stessi prelievi non si tocca S (prima fonte/agg cambiavano tra telefono «locale» e PC «hub» → backup ping-pong) */
+ if(sig(nuovo)===prima)return false;
+ S.registro=nuovo.registro;S.sondExt={da:nuovo.sondExt.da,a:nuovo.sondExt.a,fonte:"",agg:""};regSort(S);
  add.forEach(r=>{const y=+r.data.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});
  return true;}
 let sondBusy=false,pendingRender=false;
@@ -1284,7 +1240,7 @@ async function sondSync(manual){
 /* ================= scheda Collegamenti e backup ================= */
 const MESE_L=ym=>ym?MESI[+ym.slice(5,7)-1]+" "+ym.slice(0,4):"";
 function sondNote(){if(!S.sondExt)return "";
- return `<div class="banner sond-b"><b>Sondaggi automatici</b> da ${MESE_L(S.sondExt.da)}: ogni mese vale la somma dei <b>prelievi</b> registrati nell'app Guadagni sondaggi (le celle con «auto» non si modificano qui). Aggiornato: ${fmtWhen(Date.parse(S.sondExt.agg))}. <a href="#collegamenti">Dettagli</a></div>`;}
+ return `<div class="banner sond-b"><b>Sondaggi automatici</b> da ${MESE_L(S.sondExt.da)}: ogni mese vale la somma dei <b>prelievi</b> registrati nell'app Guadagni sondaggi (le celle con «auto» non si modificano qui). Aggiornato: ${fmtWhen(Date.parse(sondState().agg||S.sondExt.agg))}. <a href="#collegamenti">Dettagli</a></div>`;}
 const linkMsgs={hub:"",sond:"",file:"",ced:"",cart:"",mov:""};
 function linkMsg(k,t){linkMsgs[k]=t;const el=document.getElementById("lk-"+k+"-msg");if(el){el.textContent=t;el.hidden=!t;}}
 function hubBadge(){const s=hubState(),url=hubUrl();
@@ -1406,7 +1362,7 @@ function applyCed(arch){
   const pa=g.flatMap(c=>c.voci.filter(v=>v.categoria==="competenza"&&v.tipo==="prestazioni_aggiuntive"));
   const lordo=Math.round(pa.reduce((a,v)=>a+v.importo,0)*100)/100;
   if(lordo!==0)add.push({id:"ced-intra-"+ym,data,fonte:"intra",importo:lordo,nota:pa.map(v=>v.descrizione.toLowerCase()+" (rif. "+v.riferimento.slice(5)+"/"+v.riferimento.slice(0,4)+")").join(" · ")+" · cedolino di "+nomi,ext:"cedolini"});});
- S.registro=[...keep,...add];
+ S.registro=[...keep,...add];regSort(S);
  S.ced={agg:str(arch.aggiornato),lista,mesi,errori:(arch.errori||[]).map(e=>({file:str(e.file),errore:str(e.errore)}))};
  mesi.forEach(ym=>{const y=+ym.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});
  return sig(S)!==prima;}
@@ -1679,13 +1635,13 @@ function svSave(){SV=Object.assign(sondClean(SV),{updatedAt:new Date().toISOStri
  if(hasRealData(S)&&applySond({months:SV.months,t:Date.now(),fonte:"locale"}))scheduleSave();
  clearTimeout(svHubTimer);svHubTimer=setTimeout(()=>svHubSync(false),8000);}
 const svGet=(k,id,f)=>(SV.months[k]&&SV.months[k][id]&&SV.months[k][id][f])||0;
-function svCell(k,id){SV.months[k]=SV.months[k]||{};SV.months[k][id]=SV.months[k][id]||{g:0,p:0};return SV.months[k][id];}
+
 const svTot=k=>{let g=0,p=0;SV.sites.forEach(s=>{g+=svGet(k,s.id,"g");p+=svGet(k,s.id,"p");});return{g,p}};
 const svUsed=()=>Object.keys(SV.months).filter(k=>{const t=svTot(k);return t.g||t.p}).sort();
-const svPend=id=>SV.pending.filter(x=>!id||x.site===id).reduce((a,x)=>a+x.amount,0);
+
 const cE=c=>fmt((c||0)/100);
-function svCents(str){let t=String(str==null?"":str).trim().replace(/[€\s]/g,"");if(!t)return NaN;if(t.includes(","))t=t.replace(/\./g,"").replace(",",".");const n=Number(t);return isFinite(n)?Math.round(n*100):NaN;}
-const c2f=c=>c?(c/100).toFixed(2).replace(".",","):"";
+
+
 /* backup dei sondaggi sul PC (Hub, app «guadagni») */
 let svHubTimer=null,svHubBusy=false;
 function svHubState(){return lsJSON(SOND_HUB_STATE_KEY)}
@@ -1789,6 +1745,8 @@ const MOV_COL={carburante:"c-carb",fisse:"c-fondo",stipendio:"c-ent",sondaggi:"c
 const MOV_COND_OK=["casa","spesa","svago","viaggi","carburante","vita","straord"];
 const movLbl=k=>(MOV_CAT.find(c=>c[0]===k)||[k,"Da classificare"])[1];
 let MOV=null,MOV_M=null,MOV_BUSY=false,MOV_ERR="",MOV_ALL=false,MOV_REG=false,MOV_Q="",MOV_FC="*";const MOV_PEND={},MOV_LEG=new Set(); // scelte non ancora confermate in «Da rivedere» (sopravvivono ai render)
+view.addEventListener("click",e=>{if(!e.target.closest('[data-act="reload"]'))return;e.preventDefault();
+ const go=()=>location.reload();try{navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).then(go,go);}catch(_){go();}});
 function movLoad(){if(MOV)return MOV;try{MOV=JSON.parse(lsGet(MOV_KEY)||"null");}catch(e){MOV=null;}return MOV;}
 function movStore(d){MOV=d;try{lsSet(MOV_KEY,JSON.stringify(d));}catch(e){}}
 async function movSync(manual,path,body){
@@ -1800,8 +1758,15 @@ async function movSync(manual,path,body){
   if(current==="mese"||(current==="dashboard"&&JSON.stringify(r.movimenti)!==prima))afterExternalChange();}
  catch(e){MOV_ERR=e.message;if(manual)linkMsg("mov","Estratti conto non letti: "+e.message+".");if(current==="mese")afterExternalChange();}
  finally{MOV_BUSY=false;refreshLinks();}}
-const movMesi=()=>{const d=movLoad();return d?[...new Set(d.movimenti.map(m=>m.data.slice(0,7)))].sort():[];};
-function movRiep(ym){const d=movLoad(),o={};MOV_CAT.forEach(([k])=>o[k]=0);o[""]=0;
+/* v46: memoria dei calcoli sui movimenti. calc() gira a ogni render e a ogni modifica: movRiep/ppAuto/sondMese
+   ripassavano tutti i movimenti più volte per mese (e sondMese rileggeva i sondaggi da localStorage a ogni chiamata).
+   La memoria vale finché non cambiano gli estratti (MOV), i canali dei portali o i dati dei sondaggi. */
+let MEMO={k:null};
+function memo(){const k=(lsGet(SOND_LS_KEY)||"")+"|"+JSON.stringify(S.sondCanali||{});
+ if(MEMO.mov!==MOV||MEMO.k!==k)MEMO={mov:MOV,k,riep:{},pp:{},sond:{},mesi:null};return MEMO;}
+const movMesi=()=>{const d=movLoad();if(!d)return [];const M=memo();return M.mesi||(M.mesi=[...new Set(d.movimenti.map(m=>m.data.slice(0,7)))].sort());};
+function movRiep(ym){const M=(movLoad(),memo());if(M.riep[ym])return Object.assign({},M.riep[ym]);const o0=movRiep0(ym);M.riep[ym]=o0;return Object.assign({},o0);}
+function movRiep0(ym){const d=movLoad(),o={};MOV_CAT.forEach(([k])=>o[k]=0);o[""]=0;
  (d?d.movimenti:[]).filter(m=>m.data.startsWith(ym)).forEach(m=>{o[m.cat||""]=(o[m.cat||""]||0)+m.importo;});return o;}
 /* rimborsi spese condivise (v24, regola di Marco): prima la quota d'affitto (= importo delle spese fisse mensili
    «affitt…» in vigore quel mese, cioè la metà che paga l'altra persona) va tutta a «Casa e utenze»; il resto si divide
@@ -1824,11 +1789,13 @@ const SOND_CAN=[["banca","Banca"],["paypal","PayPal"],["amazon","Buono Amazon"]]
 /* entrate extra via PayPal (regola di Marco, v27): atteso da PayPal = prelievi sondaggi non Amazon (banca+PayPal, app)
    − accrediti diretti dei portali in banca («sondaggi») + residuo ancora atteso dal mese prima. Se da PayPal arriva più
    dell'atteso, la differenza è entrata extra ottenuta via PayPal; se arriva meno, il resto passa al mese dopo (residuo). */
-function ppAuto(ym){const L=movMesi().filter(m=>m<=ym);let res=0,r=null;
+function ppAuto(ym){const M=(movLoad(),memo());return M.pp[ym]||(M.pp[ym]=ppAuto0(ym));}
+function ppAuto0(ym){const L=movMesi().filter(m=>m<=ym);let res=0,r=null;
  L.forEach(m=>{const sv=sondMese(m),o=movRiep(m),prima=res,att=sv.banca+sv.paypal-(o.sondaggi||0)+prima,arr=o.paypal||0;
   res=Math.max(att-arr,0);r={prima,att,arr,extra:Math.max(arr-Math.max(att,0),0),res};});
  return r||{prima:0,att:0,arr:0,extra:0,res:0};}
-function sondMese(ym){svLoad();const r={banca:0,paypal:0,amazon:0,tot:0,senza:[]};
+function sondMese(ym){const M=(movLoad(),memo());if(M.sond[ym])return M.sond[ym];return (M.sond[ym]=sondMese0(ym));}
+function sondMese0(ym){svLoad();const r={banca:0,paypal:0,amazon:0,tot:0,senza:[]};
  SV.sites.forEach(s=>{const v=svGet(ym,s.id,"p")/100;if(!v)return;const c=(S.sondCanali||{})[s.id];r[c||"banca"]+=v;r.tot+=v;if(!c)r.senza.push(s.name);});return r;}
 /* saldi di fine mese dagli estratti conto (v28, decisione di Marco): per ogni mese concluso con estratti, Patrimonio ›
    Revolut = conto + deposito Revolut, Fineco = conto Fineco + conto deposito vincolato (S.vincolato.fineco, inserito a
@@ -1842,7 +1809,7 @@ function applyExtra(){const L=movMesi();if(!L.length)return false;const inL=new 
  const keep=S.registro.filter(r=>!(r.fonte==="ext"&&inL.has((r.data||"").slice(0,7))));
  const add=L.map(ym=>{const o=movRiep(ym),v=Math.max(o.extra||0,0)+(ppAuto(ym).extra||0)+vincInt(ym);if(v<0.005)return null;const [y,m]=ym.split("-").map(Number);
   return{id:"est-ext-"+ym,data:`${ym}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`,fonte:"ext",importo:Math.round(v*100)/100,nota:"Entrate extra dagli estratti conto",ext:"estratti"};}).filter(Boolean);
- const nuovo=[...keep,...add];if(sig(nuovo)===prima)return false;S.registro=nuovo;
+ const nuovo=[...keep,...add];if(sig(nuovo)===prima)return false;S.registro=nuovo;regSort(S);
  add.forEach(r=>{const y=+r.data.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});return true;}
 /* v42 (richiesta di Marco): Fineco di fine mese ricostruito per OGNI mese coperto da un estratto, anche se il file
    copre più mesi o finisce a metà mese: saldo a fine mese M = «Saldo Finale» di un file che va da ≤ 1° del mese dopo
@@ -1917,9 +1884,12 @@ function applyLinks(){if(!Array.isArray(S.link))S.link=[];if(!S.linkMem)S.linkMe
  /* 2. entrate senza cedolino */
  const grp={};L.filter(l=>l.k==="e").forEach(l=>{const ym=l.d.slice(0,7);if(cedCovers(ym,l.r))return;const g=grp[l.r+"|"+ym]=grp[l.r+"|"+ym]||{f:l.r,ym,v:0,n:0,d:""};g.v+=l.i;g.n++;if(l.d>g.d)g.d=l.d;});
  const cov=new Set(Object.keys(grp));
- S.registro=S.registro.filter(r=>r.ext!=="conti"&&!(!r.ext&&cov.has(r.fonte+"|"+(r.data||"").slice(0,7))));
+ /* v46: si tolgono solo i vecchi totali mensili («Totale del mese…»); le altre righe a mano restano (es. un incasso
+    non passato dai conti) e la scheda Entrate le segnala come possibili doppioni (contiWarn) */
+ S.registro=S.registro.filter(r=>r.ext!=="conti"&&!(!r.ext&&/^totale del mese/i.test(r.nota||"")&&cov.has(r.fonte+"|"+(r.data||"").slice(0,7))));
  Object.values(grp).sort((a,b)=>(a.ym+a.f).localeCompare(b.ym+b.f)).forEach(g=>{S.registro.push({id:`mov-${g.f}-${g.ym}`,data:g.d,fonte:g.f,importo:Math.round(g.v*100)/100,nota:`Dai conti: ${g.n} ${g.n>1?"accrediti":"accredito"}`,ext:"conti"});
   const y=+g.ym.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});
+ regSort(S);
  /* 3-4. investimenti dagli estratti */
  const d=movLoad();
  if(d&&Array.isArray(d.movimenti)){const cur=new Date().toLocaleDateString("sv-SE").slice(0,7);
@@ -1934,6 +1904,9 @@ function applyLinks(){if(!Array.isArray(S.link))S.link=[];if(!S.linkMem)S.linkMe
    if(!r){r=S.fondoMov.find(t=>!t.ext&&t.tipo===tipo&&t.data&&Math.abs(dDiff(t.data,m.data))<=20);if(r)r.id=id;else{r={id,nota:""};S.fondoMov.push(r);}}
    r.ext="estratti";r.data=m.data;r.tipo=tipo;r.importo=Math.abs(m.importo);});}
  return JSON.stringify([S.scadenzario,S.registro,S.ricorrenti,S.patrimonio,S.fondoMov,S.patEstrI])!==prima;}
+function contiWarn(Y){const L=[];S.registro.filter(r=>r.ext==="conti"&&(r.data||"").startsWith(Y+"-")).forEach(c=>{const ym=c.data.slice(0,7);
+  S.registro.filter(r=>!r.ext&&r.fonte===c.fonte&&(r.data||"").startsWith(ym)).forEach(r=>L.push(`${MESE_L(ym).toLowerCase()}: ${FN[r.fonte]} ${fmt(r.importo)}${r.nota?" («"+esc(r.nota)+"»)":""}`));});
+ return L.length?`<div class="banner"><b>Da controllare</b>: in questi mesi l'entrata arriva dagli accrediti collegati nei conti, ma c'è anche una riga inserita a mano: ${L.join("; ")}. Se è lo stesso incasso, elimina la riga a mano qui sotto.</div>`:"";}
 const fmCovers=i=>!!(S.fondoMov[i]&&S.fondoMov[i].ext);
 const etfCovers=(Y,m)=>(S.patEstrI||[]).includes(`${Y}-${String(m+1).padStart(2,"0")}`);
 /* etichette */
@@ -2015,16 +1988,12 @@ view.addEventListener("change",e=>{const t=e.target;if(!t.classList||!t.classLis
  const v=t.value;if(!v){linkSet(m,"",[]);}else if(v==="x")linkSet(m,"x",[]);else{const [k,r]=v.split(":");linkSet(m,k,r.split(","));}render();});
 
 /* riquadro nella dashboard di Finanze */
-function movPsub(){const d=movLoad();if(!d||!d.movimenti.length)return "";const L=movMesi(),ym=L[L.length-1],N=movNetto(ym),o=N.o,mn=MESE_L(ym).toLowerCase();
- const nr=d.movimenti.filter(m=>m.rivedere).length,usc=MOV_CAT.filter(c=>c[2]==="u").map(([k,l])=>[l,Math.max(-N.net[k],0),MOV_COL[k]]).filter(x=>x[1]>0),tu=sum(usc.map(x=>x[1]));
- return `<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${ym}" title="Apri il resoconto del mese"><h4>Uscite dai conti · ${mn} <small>${nr?nr+" da rivedere":"tutto classificato"}</small></h4>
-  <div class="psub-in">${donut(usc,112,15,"Uscite di "+mn,1,tu,"uscite")}<div><ul class="pleg">${usc.map(([l,v,c])=>li(c,l,v,tu)).join("")||`<li><span class="muted">Nessuna uscita</span></li>`}</ul>
-  <dl class="kv">${kv("Entrate del mese",`<span class="nt-ent">${fmt(N.te)}</span>`)}${N.R?kv("Rimborsi spese condivise",`<span class="nt-ent">${fmt(N.R,"sign")}</span>${N.G>0?" <small>ripartiti (stima)</small>":""}`):""}${o[""]?kv("Da classificare",fmt(o[""])):""}</dl></div></div></a>`;}
+
 function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
  if(!d)return `<div class="banner">${MOV_ERR?"Estratti conto non letti: "+esc(MOV_ERR)+".":hubUrl()?"Lettura in corso… se non compare nulla, controlla che l'Hub sul PC fisso sia aggiornato.":"Imposta l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div><div class="actions"><button class="btn" data-act="mov-agg">Aggiorna</button></div>`;
  if(!L.includes(ymSel))return `<div class="banner">Nessun estratto conto per ${MESE_L(ymSel).toLowerCase()}.</div><div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p>`;
- const ym=ymSel,k=L.indexOf(ym),N=movNetto(ym),o=N.o,mv=d.movimenti.filter(m=>m.data.startsWith(ym));
- const E=MOV_CAT.filter(c=>c[2]==="e"),U=MOV_CAT.filter(c=>c[2]==="u"),X=MOV_CAT.filter(c=>c[2]==="x"),P=MOV_CAT.filter(c=>c[2]==="p");
+ const ym=ymSel,N=movNetto(ym),o=N.o,mv=d.movimenti.filter(m=>m.data.startsWith(ym));
+ 
  const te=N.te,tu=N.tu,tn=tu+N.R;
  const q=(d.quadratura||[]).filter(x=>x.mese===ym);
  const qc=x=>`<span class="mq ${x.ok===true?"ok":x.ok===false?"ko":"na"}" title="${x.ok===false&&x.differenza!=null?"differenza "+fmt(x.differenza):""}">${esc(x.conto)} ${x.ok===true?"✓ quadra":x.ok===false?"⚠ non quadra"+(x.differenza!=null?" ("+fmt(x.differenza,"sign")+")":""):"· primo mese, non verificabile"}${x.parziale?" · file parziale":""}<small>${fmt(x.inizio)} → ${fmt(x.fine)}</small></span>`;
@@ -2058,8 +2027,7 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
   v("Investimenti dai conti",o.invest||0,"nt-inv");v("Giroconti",o.giro||0);v("Esclusi dai conteggi",o.escl||0);v("Da classificare",o[""]||0,"neg");
   v(`Di cui non (ancora) sui conti <small>${N.nonArr>0?"sondaggi prelevati non ancora arrivati (su PayPal o in viaggio)":"arrivati sondaggi prelevati nei mesi precedenti"}</small>`,N.nonArr);
   parts.altri=r.join("");parts.netto=kv("Entrate − uscite nette dai conti <small>con le entrate dei conti, non quelle registrate</small>",`<span class="${te+tn<0?"neg":"pos"}">${fmt(te+tn,"sign")}</span>`);parts.ok=true;}
- const tr=(c,l)=>`<tr><td>${svDotC(MOV_COL[c])}${l}</td><td class="${o[c]<0?"nt-spese":o[c]>0?"nt-ent":""}">${o[c]?fmt(o[c],"sign"):"—"}</td></tr>`;
- const tu_=(c,l)=>N.alloc[c]?`<tr><td>${svDotC(MOV_COL[c])}${l}<small>lorda ${fmt(o[c],"sign")} · rimborsi ${c==="casa"&&N.aff?`quota affitto ${fmt(N.aff,"sign")}${N.alloc[c]-N.aff>0.005?" + ≈ "+fmt(N.alloc[c]-N.aff,"sign"):""}`:"≈ "+fmt(N.alloc[c],"sign")}</small></td><td class="nt-spese">≈ ${fmt(N.net[c],"sign")}</td></tr>`:tr(c,l);
+ 
  return ` <div class="mqs">${q.map(qc).join("")||`<span class="mq na">Quadratura non disponibile</span>`}</div>
  ${riv.length?`<div class="box mv-riv"><h3>Da rivedere <small>${riv.length} in ${MESE_L(ym).toLowerCase()}${rivAll>riv.length?" · "+rivAll+" in tutto":""}</small></h3>
   <p class="note">Scegli la categoria e conferma con ✓. Con «sempre» tutti i movimenti della stessa controparte, anche di questo mese, prendono quella categoria, tranne quelli che hai già impostato a mano.</p>
@@ -2073,7 +2041,7 @@ function movBody(ymSel,parts){parts=parts||{};const d=movLoad(),L=movMesi();
    <div class="actions"><button class="btn ghost" data-act="mov-agg">Aggiorna dal PC</button></div><p class="note" id="lk-mov-msg" ${linkMsgs.mov?"":"hidden"}>${linkMsgs.mov||""}</p></div>
   <div class="box"><h3>Spese che dividete</h3><div class="mvcond">${MOV_COND_OK.map(c=>`<label><input type="checkbox" class="mv-cond" value="${c}" ${(S.movCond||[]).includes(c)?"checked":""} ${READONLY?"disabled":""}> ${movLbl(c)}</label>`).join("")}</div>
    <p class="note">Dai rimborsi del mese si toglie prima la quota d'affitto (${affQuota(ym)?fmt(affQuota(ym)):"spesa fissa mensile «Affitto»"}), che va tutta a «Casa e utenze»; il resto si divide in parti uguali tra le categorie spuntate, senza superare quanto hai speso in ciascuna. Le cifre con ≈ sono stime; il totale delle uscite nette è esatto.</p></div>
-  <div class="box"><h3>Sondaggi e PayPal <small>${MESE_L(ym).toLowerCase()}</small></h3>${(()=>{const sv=N.sv,Lp=L.filter(m=>m<=ym);
+  <div class="box"><h3>Sondaggi e PayPal <small>${MESE_L(ym).toLowerCase()}</small></h3>${(()=>{const sv=N.sv;
    const pa=N.pa;
    return `<dl class="kv">${kv("Prelevati nell'app Guadagni",fmt(sv.tot)+(sv.amazon?` <small>di cui buoni Amazon ${fmt(sv.amazon)}</small>`:""))}${kv("Prelievi non Amazon <small>banca + PayPal</small>",fmt(sv.banca+sv.paypal))}${kv("− arrivati in banca dai portali",fmt(-(o.sondaggi||0),"sign"))}${pa.prima?kv("+ ancora atteso dal mese prima",fmt(pa.prima,"sign")):""}${kv("= Atteso da PayPal",fmt(pa.att))}${kv("Arrivato da PayPal",fmt(pa.arr))}${kv("Entrate extra via PayPal <small>arrivato oltre l'atteso</small>",`<span class="${pa.extra?"nt-ent":""}">${fmt(pa.extra)}</span>`)}${kv("Ancora da arrivare <small>passa al mese dopo</small>",fmt(pa.res))}</dl>
    ${sv.senza.length?`<p class="note neg">Canale non indicato per ${sv.senza.map(esc).join(", ")}: contati come banca. Indicalo qui sotto.</p>`:""}
@@ -2089,7 +2057,7 @@ function movFiltra(){const L=document.getElementById("mov-list");if(!L)return;co
  L.querySelectorAll(".mvr").forEach(r=>{t++;const ok=(MOV_FC==="*"||r.dataset.c===MOV_FC)&&(!q||r.dataset.q.includes(q));r.hidden=!ok;if(ok)n++;});
  const c=document.getElementById("mov-n");if(c)c.textContent=n===t?"":n+" di "+t;}
 view.addEventListener("input",e=>{if(e.target.id==="mov-q"){MOV_Q=e.target.value;movFiltra();}});
-const svDotC=c=>`<i class="sv-dot" style="background:var(--${c})"></i>`;
+
 async function movClassifica(voci){if(!voci.length)return;voci.forEach(v=>{if(v.id)delete MOV_PEND[v.id];});await movSync(false,"/api/estratti/classifica",{voci});
  if(MOV_ERR)alert("Classificazione non salvata: "+MOV_ERR);}
 view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='mov-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
