@@ -491,7 +491,7 @@ table.sv2 tfoot td:first-child{font-family:var(--f-body)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 .years{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}
 .mnav{display:flex;align-items:center;gap:8px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 43px);z-index:3;background:var(--bg);padding:8px 0}
-.mnav select.mm-sel{flex:1;min-width:0;font-size:15px;font-weight:600;padding:8px 10px;text-align:center}
+.mnav select.mm-sel{flex:1;min-width:0;width:0;text-overflow:ellipsis;font-size:15px;font-weight:600;padding:8px 10px;text-align:center}
 .mbtn{flex:0 0 auto;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--accent);font-size:24px;line-height:1;cursor:pointer;box-shadow:var(--shadow)}
 .mbtn:hover:not(:disabled){border-color:var(--accent)}
 .mbtn:disabled{color:var(--muted);opacity:.4;cursor:default;box-shadow:none}
@@ -739,7 +739,7 @@ table.mvtab tfoot td{font-weight:600}
 .mvn{font-size:12px;color:var(--muted)}
 .mvr[hidden]{display:none}
 @media (min-width:900px){
- .mnav{justify-content:center}.mnav select.mm-sel{flex:0 1 340px}
+ .mnav{justify-content:center}.mnav select.mm-sel{flex:0 1 340px;width:auto}
  .mvr{align-items:center}.mvd{padding-top:0}
 }
 @media (max-width:560px){
@@ -881,3 +881,6 @@ table.avgt td:first-child{white-space:nowrap}
 .lk-m{font:inherit;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);cursor:pointer}
 .lk-ok{color:var(--good)}
 @media (max-width:520px){.mve .mv-link{max-width:100%;flex:1 1 100%}}
+/* v47 — mese con tasse maturate non coperte dal guadagno (avviso giallo, non «in rosso») */
+.banner.warn-b{border:1px solid var(--tasse);border-left-width:5px;background:color-mix(in srgb,var(--tasse) 12%,var(--surface));margin-bottom:14px}
+.banner.warn-b b:first-child{color:var(--t-tasse,var(--tasse))}

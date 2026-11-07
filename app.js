@@ -451,7 +451,7 @@ function andLeg(){const x=R.sv&&R.sv.ytd;if(!x||!x.ent)return "";const P=R.patr[
  const sub=(c,l,v)=>li(c,l,v,e).replace("<li>",'<li class="lg-s">'),hd=li("c-spese","Uscite",x.sp,e).replace("<li>",'<li class="lg-h">');
  const vt=P.varTot;
  return `<div class="andleg"><ul class="pleg">${li("c-ent","Entrate",e,e)}${hd}${sub("c-tasse","Tasse",x.tasse)}${sub("c-aff","Affitto e utenze",x.casa)}${sub("c-spese","Tutto il resto",x.resto)}${li("c-inv","Soldi investiti",x.inv,e)}${li("c-liq","Surplus di liquidità",x.sur,e)}</ul>
- <dl class="kv">${kv("Surplus dell'anno <small>liquidità + investito</small>",`<span class="${x.risp<0?"neg":"pos"}">${fmt(x.risp,"sign")}</span>`,"strong")}${kv(`Variazione del patrimonio <small>da fine ${Y-1}${P.prevInv==null?" · manca l'investito di fine "+(Y-1):""}</small>`,vt==null?`<span class="muted">—</span>`:`<span class="${vt<0?"neg":"pos"}">${fmt(vt,"sign")}</span>`)}</dl></div>`;}
+ <dl class="kv">${(()=>{const k=(R.ytdAll[Y]&&R.ytdAll[Y].n)||0;return k?kv(`Tasse maturate nel ${Y} <small>sulle entrate di ${R.ytdAll[Y].lbl.replace(" "+Y,"")}</small>`,`<span class="nt-tasse">${fmt(x.acc)}</span>`,"strong")+kv(`In media al mese <small>÷ ${k} ${k>1?"mesi":"mese"}</small>`,`<span class="nt-tasse">${fmt(x.acc/k)}</span>`)+kv(`Tasse pagate nel ${Y}`,`<span class="nt-tasse">${fmt(x.tasse)}</span>`):"";})()}${kv("Surplus dell'anno <small>liquidità + investito</small>",`<span class="${x.risp<0?"neg":"pos"}">${fmt(x.risp,"sign")}</span>`,"strong")}${kv(`Variazione del patrimonio <small>da fine ${Y-1}${P.prevInv==null?" · manca l'investito di fine "+(Y-1):""}</small>`,vt==null?`<span class="muted">—</span>`:`<span class="${vt<0?"neg":"pos"}">${fmt(vt,"sign")}</span>`)}</dl></div>`;}
 function dashPatCard(Y){const P=R.patr[Y]||{},L=P.last;
  if(!(L>=0))return `<div class="box pcard"><h3>Composizione del patrimonio</h3><p class="muted">Nessun mese compilato nel ${Y}.</p></div>`;
  const g=k=>+(getP(S,`patrimonio.${Y}.${L}.${k}`)||0),lq=g("fineco")+g("revolut"),iv=g("fondo")+g("etf");
@@ -603,13 +603,17 @@ V.risparmio=()=>{const PY=R.PY;return `<section class="sheet">
 /* ================= resoconto mensile ================= */
 /* riepilogo di un mese (v31): entrate, uscite, investito e guadagno. Fonte: resoconto (saldi in Patrimonio + entrate
    registrate: guadagno = variazione liquidità + investito) se il mese c'è, altrimenti i movimenti degli estratti conto. */
+/* v47 (decisione di Marco): «in rosso» solo se il mese ha perso soldi, cioè guadagno complessivo + tasse pagate nel mese < 0
+   (le tasse pagate erano già da parte); se il guadagno è positivo ma non copre le tasse maturate sulle entrate del mese
+   → «tasse non coperte» (avviso giallo). Prima bastava risparmio netto < 0 e febbraio risultava in rosso con +986 €. */
+const mesStato=q=>!q||q.src!=="res"?"":q.guad+n(q.tas)<-0.005?"rosso":q.guad+n(q.tas)<n(q.acc)-0.005?"tasse":"";
 function mesSum(ym){const Y=ym.slice(0,4),m=+ym.slice(5)-1,x=R.svAll&&R.svAll[Y];
- if(x&&x.ent[m]!=null&&x.risp[m]!=null){const ent=x.ent[m],inv=x.inv[m]||0,guad=x.risp[m];return{ym,src:"res",ent,inv,guad,usc:ent-guad,liq:guad-inv};}
+ if(x&&x.ent[m]!=null&&x.risp[m]!=null){const ent=x.ent[m],inv=x.inv[m]||0,guad=x.risp[m];return{ym,src:"res",ent,inv,guad,usc:ent-guad,liq:guad-inv,acc:n(x.acc[m]),tas:n(x.tasse[m])};}
  if(movMesi().includes(ym)){const N=movNetto(ym),inv=-(N.o.invest||0),usc=-(N.tu+N.R),ent=N.te,guad=ent-usc;return{ym,src:"mov",ent,inv,guad,usc,liq:guad-inv};}
  return null;}
 const mesiSum=()=>[...new Set([...monthsAvail(),...movMesi()])].sort();
 
-const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<div class="mleg"><ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}</ul><dl class="kv mleg-kv">${kv(g>=0?"Guadagno del mese <small>rimasto sui conti</small>":"Perdita del mese <small>presa dai conti</small>",`<span class="${g<0?"neg":"pos"}">${fmt(g,"sign")}</span>`,"strong")}${kv("Guadagno complessivo <small>guadagno + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`)}${q.ent>0?kv("Tasso di risparmio",fmt(q.guad/q.ent,"pct1")):""}</dl></div>`;};
+const colLeg=q=>{const inv=Math.max(q.inv,0),g=q.liq;return `<div class="mleg"><ul class="pleg">${li("c-ent","Entrate",q.ent,q.ent)}${li("c-spese","Uscite",q.usc,q.ent)}${li("c-inv","Investito",inv,q.ent)}</ul><dl class="kv mleg-kv">${kv(g>=0?"Guadagno del mese <small>rimasto sui conti</small>":"Perdita del mese <small>presa dai conti</small>",`<span class="${g<0?"neg":"pos"}">${fmt(g,"sign")}</span>`,"strong")}${kv("Guadagno complessivo <small>guadagno + investito</small>",`<span class="${q.guad<0?"neg":"pos"}">${fmt(q.guad,"sign")}</span>`)}${q.ent>0?kv("Tasso di risparmio",fmt(q.guad/q.ent,"pct1")):""}${q.src==="res"?kv("Tasse da mettere da parte <small>maturate sulle entrate del mese</small>",`<span class="nt-tasse">${fmt(q.acc)}</span>`)+(q.tas?kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(q.tas)}</span>`):"")+kv("Guadagno al netto delle tasse <small>guadagno + tasse pagate − da mettere da parte</small>",`<span class="${q.guad+q.tas-q.acc<0?"neg":"pos"}">${fmt(q.guad+q.tas-q.acc,"sign")}</span>`):""}</dl></div>`;};
 /* chip della dashboard: unico collegamento al Resoconto mensile */
 function riepPsub(){const L=mesiSum();let q=null;for(let i=L.length-1;i>=0&&!q;i--)q=mesSum(L[i]);if(!q)return "";const mn=MESE_L(q.ym).toLowerCase();
  return `<a class="psub" href="#mese" data-act="go" data-tab="mese" data-mm="${q.ym}" title="Apri il resoconto mensile"><h4>Riepilogo del mese <small>${mn}</small></h4><span hidden data-psum>${fmt(Math.round(q.guad),"sign").replace(/,\d\d(?=\s|$)/,"")}</span>
@@ -653,8 +657,8 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
  if(!MM||!L.includes(MM))MM=L[L.length-1];
  const k=L.indexOf(MM);
  const yrs=[...new Set(L.map(v=>v.slice(0,4)))];
- const isNeg=v=>{const z=R.svAll[v.slice(0,4)],i=+v.slice(5)-1;return z&&z.rn[i]!=null&&z.rn[i]<0;};
- const opts=yrs.map(y=>`<optgroup label="${y}">${L.filter(v=>v.startsWith(y)).map(v=>`<option value="${v}" ${v===MM?"selected":""}>${MESI[+v.slice(5)-1]} ${y}${isNeg(v)?" · in rosso":""}</option>`).join("")}</optgroup>`).join("");
+ const isNeg=v=>{const st=mesStato(mesSum(v));return st==="rosso"?" · in rosso":st==="tasse"?" · tasse non coperte":"";};
+ const opts=yrs.map(y=>`<optgroup label="${y}">${L.filter(v=>v.startsWith(y)).map(v=>`<option value="${v}" ${v===MM?"selected":""}>${MESI[+v.slice(5)-1]} ${y}${isNeg(v)}</option>`).join("")}</optgroup>`).join("");
  const nav=(d,lab,ar)=>{const t=L[k+d];return `<button class="mbtn" data-act="mm" data-mm="${t||""}" ${t?"":"disabled"} aria-label="${lab}${t?": "+MESI[+t.slice(5)-1].toLowerCase()+" "+t.slice(0,4):""}">${ar}</button>`;};
  const headH=`<div class="sheet-h"><h2>Resoconto mensile</h2><p>Entrate, uscite e guadagno del mese; sotto, il dettaglio dei movimenti dei conti.</p></div>`;
  const navH=`<div class="mnav" role="group" aria-label="Scegli il mese">${nav(-1,"Mese precedente","‹")}<select class="in sel mm-sel" id="mm-sel" aria-label="Mese">${opts}</select>${nav(1,"Mese successivo","›")}</div>`;
@@ -663,10 +667,11 @@ V.mese=()=>{const LR=monthsAvail(),L=[...new Set([...LR,...movMesi()])].sort();
  let resAltri="",negB="";
  if(hasR){const Y=MM.slice(0,4),m=+MM.slice(5)-1,x=R.svAll[Y],g=k=>x[k][m],ent=g("ent");
   const affM=Math.max(n(g("aff")),0);
-  const neg=g("rn")<0,usc=Math.max(g("spT")||0,0)+Math.max(g("acc")||0,0),def=neg?-g("rn"):0;
-  negB=neg?`<div class="banner neg-b"><b>Mese in rosso</b>: le uscite (${fmt(usc)}) hanno superato le entrate (${fmt(ent)}) di <b>${fmt(def)}</b>, presi dai risparmi.${g("risp")<0?` La liquidità è scesa di ${fmt(-g("risp"))}.`:` La liquidità non è scesa (${fmt(g("risp"),"sign")}) solo perché le tasse da accantonare non sono ancora state pagate.`}</div>`:"";
+  const st=mesStato(q),gt=g("risp")+n(g("tasse")),acc=n(g("acc"));
+  negB=st==="rosso"?`<div class="banner neg-b"><b>Mese in rosso</b>: le uscite (${fmt(ent-gt)}, tasse pagate escluse) hanno superato le entrate (${fmt(ent)}) di <b>${fmt(-gt)}</b>, presi dai risparmi.${acc>0?` In più le entrate del mese hanno fatto maturare ${fmt(acc)} di tasse da mettere da parte.`:""}</div>`
+   :st==="tasse"?`<div class="banner warn-b"><b>Tasse non coperte</b>: nel mese hai messo da parte ${fmt(gt)}${n(g("tasse"))?" (guadagno + tasse pagate nel mese)":""}, ma le tasse maturate sulle entrate del mese sono ${fmt(acc)}: mancano <b>${fmt(acc-gt)}</b> all'accantonamento.</div>`:"";
   const ya=R.ytdAll[Y],avg=ya&&ya.n?ya.ent/ya.n:null;
-  resAltri=kv("Da accantonare per tasse <small>maturate sulle entrate del mese</small>",`<span class="nt-tasse">${fmt(g("acc")||0)}</span>`)+kv("Tasse pagate nel mese",`<span class="nt-tasse">${fmt(g("tasse"))}</span>`)+kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+(affM>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(affM)}</span>`):"")+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
+  resAltri=kv("Spese fisse del mese",`<span class="nt-spese">${fmt(g("fisse"))}</span>`)+(affM>0?kv("&nbsp;&nbsp;di cui affitto",`<span class="nt-aff">${fmt(affM)}</span>`):"")+kv("Altre spese (di vita) <small>per differenza</small>",`<span class="nt-spese">${fmt(g("spese"))}</span>`)+(avg!=null?kv(`Media delle entrate <small>${ya.lbl}</small>`,fmt(avg)):"");}
  
  const top=q?`<div class="box mcol-box"><h3>Entrate e uscite <small>${mn}${q.src==="mov"?" · dagli estratti conto":""}</small></h3><div class="mcol-in">${mchHTML(L,k)}${colLeg(q)}</div>
   <p class="note">${q.src==="res"?"Entrate registrate; uscite = entrate − risparmio (variazione della liquidità + investito).":"Entrate e uscite nette dagli estratti conto (manca il resoconto: servono i saldi in Patrimonio)."} In alto il mese scelto e quelli accanto (toccali o scorri per cambiare mese); fondo scala = valore più alto dell'anno (entrate o uscite + investito), arrotondato al migliaio, uguale per tutti i mesi dell'anno. La differenza tra le due barre è il guadagno (o la perdita) del mese, indicato sotto.</p></div>`:"";
@@ -894,17 +899,17 @@ function svTable(){const sv=R.sv,PY=R.PY;if(!sv)return "";
  const bar=t=>{const p=t==null?0:Math.min(1,Math.abs(t));return `<span class="tbar"><i style="width:${(p*100).toFixed(0)}%;background:var(${t<0?"--c-spese":"--c-risp"})"></i></span>`;};
  const best=ok.reduce((a,i)=>sv.rn[i]>sv.rn[a]?i:a,ok[0]);
  const hasA=n(sv.ytd&&sv.ytd.aff)>0;
- const cols=det?[["Entrate"],["Spese di vita"],...(hasA?[["Affitto"],["Altre fisse"]]:[["Spese fisse"]]),["Tasse pagate"],["Risparmio"],["Tasso"],["Da accantonare"],["Risparmio netto"]]:[["Entrate €"],["Uscite €"],["Risparmio €"],["Tasso"]];
+ const cols=det?[["Entrate"],["Spese di vita"],...(hasA?[["Affitto"],["Altre fisse"]]:[["Spese fisse"]]),["Tasse pagate"],["Risparmio"],["Tasso"],["Da accantonare"],["Risparmio netto"]]:[["Entrate €"],["Uscite €"],["Risparmio €"],["Tasso"],["Tasse da parte €"]];
  const cells=i=>det?[c(sv.ent[i],"nt-ent"),c(sv.spese[i],"nt-spese"),...(hasA?[c(sv.aff[i],"nt-aff"),c(n(sv.fisse[i])-n(sv.aff[i]),"nt-spese")]:[c(sv.fisse[i],"nt-spese")]),c(sv.tasse[i],"nt-tasse"),sgn(sv.risp[i]),fmt(sv.tasso[i],"pct1")+bar(sv.tasso[i]),c(sv.acc[i],"nt-tasse"),sgn(sv.rn[i])]
-  :[c(sv.ent[i],"nt-ent"),c(usc(i),"nt-spese"),sgn(sv.risp[i]),fmt(sv.tasso[i],"pct1")+bar(sv.tasso[i])];
+  :[c(sv.ent[i],"nt-ent"),c(usc(i),"nt-spese"),sgn(sv.risp[i]),fmt(sv.tasso[i],"pct1")+bar(sv.tasso[i]),c(sv.acc[i],"nt-tasse")];
  const head=det?`<tr class="grp"><th rowspan="2">Mese</th><th rowspan="2">Entrate</th><th colspan="${hasA?4:3}">Uscite</th><th colspan="4">Risparmio</th><th rowspan="2" class="go" aria-label="Apri"></th></tr><tr class="grp2">${cols.slice(1).map(x=>`<th>${x[0]}</th>`).join("")}</tr>`
   :`<tr><th>Mese</th>${cols.map(x=>`<th>${x[0]}</th>`).join("")}<th class="go" aria-label="Apri"></th></tr>`;
  let rows="";for(let i=0;i<=Math.min(lastM,11);i++){
   if(sv.risp[i]==null){rows+=`<tr class="nod"><td>${mLbl(i)}</td><td colspan="${cols.length+1}" class="nodt">${`${PY}-${pad(i)}`===TODAY.slice(0,7)?"mese in corso: si completa con il saldo di fine mese":"saldi mancanti in Patrimonio"}</td></tr>`;continue;}
   rows+=`<tr class="lk${i===best?" best":""}" data-act="go" data-tab="mese" data-mm="${PY}-${pad(i)}" tabindex="0" title="Apri il resoconto di ${MESI[i].toLowerCase()} ${PY}"><td>${mLbl(i)}${i===best?' <small class="bst">migliore</small>':""}</td>${cells(i).map(x=>`<td>${x}</td>`).join("")}<td class="go">›</td></tr>`;}
  const Y=sv.ytd,k=ok.length,av=v=>v/k;
- const tot=det?[c(Y.ent,"nt-ent"),c(Y.spese,"nt-spese"),...(hasA?[c(Y.aff,"nt-aff"),c(Y.fisse-Y.aff,"nt-spese")]:[c(Y.fisse,"nt-spese")]),c(Y.tasse,"nt-tasse"),sgn(Y.risp),fmt(Y.tasso,"pct1"),c(Y.acc,"nt-tasse"),sgn(Y.rn)]:[c(Y.ent,"nt-ent"),c(Y.ent-Y.risp,"nt-spese"),sgn(Y.risp),fmt(Y.tasso,"pct1")];
- const med=det?[c(av(Y.ent),"nt-ent"),c(av(Y.spese),"nt-spese"),...(hasA?[c(av(Y.aff),"nt-aff"),c(av(Y.fisse-Y.aff),"nt-spese")]:[c(av(Y.fisse),"nt-spese")]),c(av(Y.tasse),"nt-tasse"),sgn(av(Y.risp)),"",c(av(Y.acc),"nt-tasse"),sgn(av(Y.rn))]:[c(av(Y.ent),"nt-ent"),c(av(Y.ent-Y.risp),"nt-spese"),sgn(av(Y.risp)),""];
+ const tot=det?[c(Y.ent,"nt-ent"),c(Y.spese,"nt-spese"),...(hasA?[c(Y.aff,"nt-aff"),c(Y.fisse-Y.aff,"nt-spese")]:[c(Y.fisse,"nt-spese")]),c(Y.tasse,"nt-tasse"),sgn(Y.risp),fmt(Y.tasso,"pct1"),c(Y.acc,"nt-tasse"),sgn(Y.rn)]:[c(Y.ent,"nt-ent"),c(Y.ent-Y.risp,"nt-spese"),sgn(Y.risp),fmt(Y.tasso,"pct1"),c(Y.acc,"nt-tasse")];
+ const med=det?[c(av(Y.ent),"nt-ent"),c(av(Y.spese),"nt-spese"),...(hasA?[c(av(Y.aff),"nt-aff"),c(av(Y.fisse-Y.aff),"nt-spese")]:[c(av(Y.fisse),"nt-spese")]),c(av(Y.tasse),"nt-tasse"),sgn(av(Y.risp)),"",c(av(Y.acc),"nt-tasse"),sgn(av(Y.rn))]:[c(av(Y.ent),"nt-ent"),c(av(Y.ent-Y.risp),"nt-spese"),sgn(av(Y.risp)),"",c(av(Y.acc),"nt-tasse")];
  return `<details class="more svt" id="svt-det" ${SVT_OPEN?"open":""}><summary>Tabella mese per mese</summary>
   <div class="svt-bar"><div class="seg sm" role="tablist" aria-label="Colonne">${[["sint","Sintesi"],["det","Dettaglio"]].map(([v,l])=>`<button class="segb" data-act="svv" data-v="${v}" aria-selected="${v===SVV}">${l}</button>`).join("")}</div><span class="muted svt-h">${det?"Scorri di lato per tutte le colonne · ":""}Tocca un mese per il resoconto</span></div>
   <div class="tbl-wrap flat"><table class="sv2${det?" det":""}"><thead>${head}</thead><tbody>${rows}</tbody>
