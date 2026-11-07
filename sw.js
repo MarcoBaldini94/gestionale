@@ -1,6 +1,6 @@
 // Service worker: rete prima (così gli aggiornamenti arrivano subito), cache se offline.
 // Aumenta VERSION a ogni modifica dei file per aggiornare la cache.
-const VERSION = "v41";
+const VERSION = "v42";
 const CACHE = "gestionale-" + VERSION;
 const FILES = ["./", "index.html", "styles.css", "app.js", "app.webmanifest",
   "fonts/BricolageGrotesque.woff2", "fonts/IBMPlexSans-400.woff2", "fonts/IBMPlexSans-500.woff2", "fonts/IBMPlexSans-600.woff2",

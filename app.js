@@ -19,7 +19,7 @@ const scadRow=(voce,anno,auto,frazione,scadenza)=>({id:uid(),voce,anno,auto:auto
 const isY=y=>/^\d{4}$/.test(String(y));
 
 function defaults(){const y=new Date().getFullYear();return{v:3,anni:{[y]:{...DEF_ANNO}},globali:{...DEF_GLOB},registro:[],patrimonio:{[y]:blankPat()},
-  chiusure:{},chiusureInv:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[]};}
+  chiusure:{},chiusureInv:{},fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[],patEstrF:[]};}
 
 /* conversione dal formato del foglio (v1/v2): mesi → registro movimenti, parametri → tabella per anno */
 function migrate(o){
@@ -73,7 +73,7 @@ function sanitize(s){
   o.prev={entrate:num(s.prev&&s.prev.entrate),spese:num(s.prev&&s.prev.spese),inv:num(s.prev&&s.prev.inv)};
   o.gen=(Array.isArray(s.gen)?s.gen:[]).filter(x=>typeof x==="string");
   o.fondoMov=(Array.isArray(s.fondoMov)?s.fondoMov:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),data:/^\d{4}-\d{2}-\d{2}$/.test(t.data)?t.data:"",tipo:t.tipo==="riscatto"?"riscatto":"acquisto",importo:num(t.importo),nota:str(t.nota)}));
-  o.vincolato={fineco:(Array.isArray(s.vincolato&&s.vincolato.fineco)?s.vincolato.fineco:[]).filter(r=>r&&/^\d{4}-\d{2}$/.test(r.da||"")&&num(r.importo)!=null&&r.importo>=0).map(r=>({da:r.da,importo:r.importo})).sort((a,b)=>a.da.localeCompare(b.da))};o.patEstr=(Array.isArray(s.patEstr)?s.patEstr:[]).filter(x=>/^\d{4}-\d{2}$/.test(x)).slice(-240);
+  o.vincolato={fineco:(Array.isArray(s.vincolato&&s.vincolato.fineco)?s.vincolato.fineco:[]).filter(r=>r&&/^\d{4}-\d{2}$/.test(r.da||"")&&num(r.importo)!=null&&r.importo>=0).map(r=>({da:r.da,importo:r.importo})).sort((a,b)=>a.da.localeCompare(b.da))};o.patEstr=(Array.isArray(s.patEstr)?s.patEstr:[]).filter(x=>/^\d{4}-\d{2}$/.test(x)).slice(-240);o.patEstrF=(Array.isArray(s.patEstrF)?s.patEstrF:[]).filter(x=>/^\d{4}-\d{2}$/.test(x)).slice(-240);
   o.sondCanali={};if(s.sondCanali&&typeof s.sondCanali==="object")Object.entries(s.sondCanali).forEach(([k,v])=>{if(/^[a-z0-9_-]{1,48}$/.test(k)&&["banca","paypal","amazon"].includes(v))o.sondCanali[k]=v;});
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","carburante","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
@@ -514,7 +514,7 @@ V.patrimonio=()=>{
  const cy=[...new Set([...yearsOf(S.chiusure),Y-1])].sort((a,b)=>a-b);
  const tabs=[["liq","Liquidità"],["inv","Investimenti"],["rie","Riepilogo"]];
  const body={
-  liq:()=>`<div class="box"><h3>Saldi dei conti mese per mese</h3><p class="note">Saldo all'ultimo giorno del mese. Dai mesi con estratto conto i saldi si riempiono da soli («estratto»): Revolut = conto + deposito; Fineco = conto + conto deposito vincolato qui sotto.</p>
+  liq:()=>`<div class="box"><h3>Saldi dei conti mese per mese</h3><p class="note">Saldo all'ultimo giorno del mese. Dai mesi con estratto conto i saldi si riempiono da soli («estratto»): Revolut = conto + deposito; Fineco = conto + conto deposito vincolato qui sotto. Fineco si ricava per ogni mese coperto da un estratto, anche se il file copre più mesi o finisce a metà mese (saldo finale del file meno i movimenti successivi).</p>
    <details class="more" ${(S.vincolato.fineco||[]).length?"":"open"}><summary>Conto deposito vincolato Fineco${(S.vincolato.fineco||[]).length?" · ora "+fmt(vincAt("9999-12")):""}</summary>
     <p class="note">Non compare nell'estratto: va sommato al conto. Indica l'importo e da quale mese vale; se cambia (rinnovo con importo diverso, scadenza senza rinnovo = 0) aggiungi una variazione: i mesi precedenti non cambiano.</p>
     <div class="vinc">${(S.vincolato.fineco||[]).map((r,i)=>`<div class="vinc-r"><span>dal ${MESE_L(r.da).toLowerCase()}</span><b>${fmt(r.importo)}</b><button class="icon-btn" data-act="vinc-del" data-vi="${i}" aria-label="Togli" ${READONLY?"disabled":""}>×</button></div>`).join("")}
@@ -1837,20 +1837,35 @@ function applyExtra(){const L=movMesi();if(!L.length)return false;const inL=new 
   return{id:"est-ext-"+ym,data:`${ym}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`,fonte:"ext",importo:Math.round(v*100)/100,nota:"Entrate extra dagli estratti conto",ext:"estratti"};}).filter(Boolean);
  const nuovo=[...keep,...add];if(sig(nuovo)===prima)return false;S.registro=nuovo;
  add.forEach(r=>{const y=+r.data.slice(0,4);if(!S.patrimonio[y])S.patrimonio[y]=blankPat();});return true;}
+/* v42 (richiesta di Marco): Fineco di fine mese ricostruito per OGNI mese coperto da un estratto, anche se il file
+   copre più mesi o finisce a metà mese: saldo a fine mese M = «Saldo Finale» di un file che va da ≤ 1° del mese dopo
+   ad «Al» ≥ fine di M, meno i movimenti Fineco tra fine M (esclusa) e «Al» (inclusa). Tra i file adatti vale quello che
+   finisce prima. Mesi riempiti: S.patEstr = Revolut, S.patEstrF = Fineco (prima un'unica lista: Revolut risultava «estratto»
+   anche nei mesi coperti solo da Fineco e viceversa). Serve l'Hub aggiornato (saldoFinale nell'elenco dei file); con l'Hub vecchio resta la regola v28. */
+const ymEnd=ym=>{const [y,m]=ym.split("-").map(Number);return `${ym}-${String(new Date(y,m,0).getDate()).padStart(2,"0")}`;};
+const ymNext=ym=>{const [y,m]=ym.split("-").map(Number);return m===12?`${y+1}-01`:`${y}-${String(m+1).padStart(2,"0")}`;};
+function finecoFine(d,ym){const fs=(d.file||[]).filter(f=>f.banca==="fineco"&&f.saldoFinale!=null&&f.periodo&&/^\d{4}-\d{2}-\d{2}$/.test(f.periodo.a||"")&&/^\d{4}-\d{2}-\d{2}$/.test(f.periodo.da||""));
+ const e=ymEnd(ym),nx=ymNext(ym)+"-01",c=fs.filter(f=>f.periodo.a>=e&&f.periodo.da<=nx).sort((a,b)=>a.periodo.a.localeCompare(b.periodo.a))[0];if(!c)return null;
+ const dopo=sum(d.movimenti.filter(m=>m.conto==="Fineco"&&m.data>e&&m.data<=c.periodo.a).map(m=>+m.importo||0));
+ return Math.round((c.saldoFinale-dopo)*100)/100;}
 function applyEstrSaldi(){const d=movLoad();if(!d||!Array.isArray(d.quadratura))return false;
  const cur=new Date().toLocaleDateString("sv-SE").slice(0,7),last={},per={};
  d.quadratura.slice().sort((a,b)=>a.mese.localeCompare(b.mese)).forEach(q=>{(per[q.mese]=per[q.mese]||{})[q.conto]=q;});
- const mesi=Object.keys(per).sort(),prima=JSON.stringify([S.patrimonio,S.patEstr]),cov=new Set();
- mesi.forEach(ym=>{Object.entries(per[ym]).forEach(([c,q])=>{if(q.fine!=null&&!q.parziale)last[c]=q.fine;});
-  if(ym>=cur)return;const [Y,M]=ym.split("-"),m=+M-1;let ok=false;
-  const set=(k,v)=>{if(!S.patrimonio[Y])S.patrimonio[Y]=blankPat();S.patrimonio[Y][m][k]=Math.round(v*100)/100;ok=true;};
-  if(last.Revolut!=null||last["Revolut deposito"]!=null)set("revolut",(last.Revolut||0)+(last["Revolut deposito"]||0));
-  const vv=vincAt(ym);if(last.Fineco!=null&&vv!=null&&!(per[ym].Fineco&&per[ym].Fineco.parziale))set("fineco",last.Fineco+vv);
-  if(ok)cov.add(ym);});
- S.patEstr=[...new Set([...(S.patEstr||[]),...cov])].sort();
- return JSON.stringify([S.patrimonio,S.patEstr])!==prima;}
+ const nuovo=(d.file||[]).some(f=>f.banca==="fineco"&&"saldoFinale" in f);
+ const fm=[];(d.file||[]).forEach(f=>{const da=f.periodo&&f.periodo.da,a=f.periodo&&f.periodo.a;if(f.banca!=="fineco"||!/^\d{4}-\d{2}-\d{2}$/.test(da||"")||!/^\d{4}-\d{2}-\d{2}$/.test(a||""))return;
+  let y=+da.slice(0,4),m=+da.slice(5,7)-(da.slice(8)==="01"?1:0);if(m<1){m=12;y--;}for(let k=0;k<240;k++){const ym=`${y}-${String(m).padStart(2,"0")}`;if(ym>a.slice(0,7))break;fm.push(ym);if(++m>12){m=1;y++;}}});
+ const mesi=[...new Set([...Object.keys(per),...(d.movimenti||[]).map(m=>m.data.slice(0,7)),...fm])].sort(),prima=JSON.stringify([S.patrimonio,S.patEstr,S.patEstrF]),cov=new Set(),covF=new Set();
+ mesi.forEach(ym=>{Object.entries(per[ym]||{}).forEach(([c,q])=>{if(q.fine!=null&&!q.parziale)last[c]=q.fine;});
+  if(ym>=cur)return;const [Y,M]=ym.split("-"),m=+M-1;
+  const set=(k,v)=>{if(!S.patrimonio[Y])S.patrimonio[Y]=blankPat();S.patrimonio[Y][m][k]=Math.round(v*100)/100;(k==="fineco"?covF:cov).add(ym);};
+  if(per[ym]&&(last.Revolut!=null||last["Revolut deposito"]!=null))set("revolut",(last.Revolut||0)+(last["Revolut deposito"]||0));
+  const vv=vincAt(ym);if(vv==null)return;
+  if(nuovo){const f=finecoFine(d,ym);if(f!=null)set("fineco",f+vv);}
+  else if(per[ym]&&last.Fineco!=null&&!(per[ym].Fineco&&per[ym].Fineco.parziale))set("fineco",last.Fineco+vv);});
+ S.patEstr=[...new Set([...(S.patEstr||[]),...cov])].sort();S.patEstrF=[...new Set([...(S.patEstrF||[]),...covF])].sort();
+ return JSON.stringify([S.patrimonio,S.patEstr,S.patEstrF])!==prima;}
 const vincAt=ym=>{let v=null;((S.vincolato||{}).fineco||[]).forEach(r=>{if(r.da<=ym)v=r.importo;});return v;};
-const estCovers=(Y,m,k)=>(S.patEstr||[]).includes(`${Y}-${String(m+1).padStart(2,"0")}`)&&(k==="revolut"||vincAt(`${Y}-${String(m+1).padStart(2,"0")}`)!=null);
+const estCovers=(Y,m,k)=>{const ym=`${Y}-${String(m+1).padStart(2,"0")}`;return k==="revolut"?(S.patEstr||[]).includes(ym):(S.patEstrF||[]).includes(ym)&&vincAt(ym)!=null;};
 const estCell=(Y,m,k,path)=>estCovers(Y,m,k)?`<span class="est-c" title="Saldo di fine mese dall'estratto conto">${fmt(getP(S,path))}<span class="nm">estratto</span></span>`:inp(path);
 /* riquadro nella dashboard di Finanze */
 function movPsub(){const d=movLoad();if(!d||!d.movimenti.length)return "";const L=movMesi(),ym=L[L.length-1],N=movNetto(ym),o=N.o,mn=MESE_L(ym).toLowerCase();
