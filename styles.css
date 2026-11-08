@@ -926,3 +926,4 @@ tr.proj td{font-style:italic;color:var(--muted)}tr.proj td span{opacity:.85}
 .mhb.pj .mhb-bar i{opacity:.45}.mhb.pj .mhb-bar{outline:1px dashed var(--line);outline-offset:1px}
 .mst-t.pj{border-style:dashed}.mst-t.pj .mst-mini i{opacity:.45}
 .mvr-ed .btn.sm{justify-self:start;white-space:normal;text-align:left}
+label.riclav{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)}label.riclav select{font-size:12px;padding:3px 6px;max-width:100%}
