@@ -917,3 +917,12 @@ tr.proj td{font-style:italic;color:var(--muted)}tr.proj td span{opacity:.85}
 .pr-form{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:end;margin-top:8px}.pr-form label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}
 #pr-box .lnk,#pj-box .lnk{background:none;border:0;padding:0;font:inherit;text-decoration:underline;cursor:pointer;color:var(--link)}
 .btn.sm{padding:3px 10px;font-size:12px}
+/* v52: prestiti come barra a parte nel Resoconto; mesi stimati */
+.mhb-pr .mhb-t span{min-width:0;overflow-wrap:anywhere}
+.mhb-pr .mhb-t b{font-size:12.5px}
+.mhb-bar i.mc-prr{background:var(--c-ent)}
+.mhb-bar i.mc-pr{background:repeating-linear-gradient(45deg,var(--qa) 0 3px,color-mix(in srgb,var(--qa) 30%,transparent) 3px 6px)}
+.mhb-n{display:block;font-size:11.5px;color:var(--muted)}
+.mhb.pj .mhb-bar i{opacity:.45}.mhb.pj .mhb-bar{outline:1px dashed var(--line);outline-offset:1px}
+.mst-t.pj{border-style:dashed}.mst-t.pj .mst-mini i{opacity:.45}
+.mvr-ed .btn.sm{justify-self:start;white-space:normal;text-align:left}
