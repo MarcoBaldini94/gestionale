@@ -3,7 +3,7 @@
 /* ================= modello dati ================= */
 /* v46: versione dei dati scritta in ogni backup (S.appVer). Una copia dell'app più vecchia di quella che ha salvato
    l'ultimo backup sul PC non lo adotta e non lo sovrascrive (perderebbe i campi nuovi, es. i collegamenti): chiede di ricaricare. */
-const APP_VER=52;
+const APP_VER=53;
 const MESI=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const FONTI=[["lp","Libera professione","P.IVA forfettario"],["gm","Guardia medica","già tassata dall'ASL"],["ssn","Stipendio SSN","netto in busta"],["sond","Sondaggi","netto"],["spec","Borsa specializzazione","esente"],["ext","Entrate extra (dai conti)","dagli estratti conto"],["altro","Altro",""],["intra","Intramoenia / aggiuntiva","lordo dal cedolino, già nel netto SSN"]];
 const FONTI_Y=Y=>(+Y>=2027?["ssn","intra","sond","ext","altro"]:["lp","gm","ssn","intra","sond","spec","ext","altro"]).map(k=>FONTI.find(f=>f[0]===k));
@@ -90,7 +90,7 @@ function sanitize(s){
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","carburante","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
     mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
-    freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),lav:["dopo","prima"].includes(t.lav)?t.lav:"",adeb:t.adeb!==false,da:/^\d{4}-\d{2}$/.test(t.da)?t.da:"",...(t.reale&&num(t.reale.anno)!=null&&num(t.reale.imp)!=null?{reale:{anno:t.reale.anno,imp:t.reale.imp}}:{})}));
+    freq:t.freq==="m"?"m":"a",giorno:Math.min(31,Math.max(1,num(t.giorno)??1)),lav:["dopo","prima"].includes(t.lav)?t.lav:"",adeb:t.adeb!==false,giornoA:Math.min(31,Math.max(0,Math.round(num(t.giornoA)??0))),da:/^\d{4}-\d{2}$/.test(t.da)?t.da:"",...(t.reale&&num(t.reale.anno)!=null&&num(t.reale.imp)!=null?{reale:{anno:t.reale.anno,imp:t.reale.imp}}:{})}));
   return o;
 }
 /* v45: ordine fisso del registro (data, fonte, id). Le righe automatiche (cedolini, conti, sondaggi, extra) venivano
@@ -139,7 +139,8 @@ function ensureRic(s){if(!s.ricorrenti)s.ricorrenti=[];const cy=new Date().getFu
   s.ricorrenti.forEach(t=>{if(t.freq==="m"){s.scadenzario=s.scadenzario.filter(r=>r.ric!==t.id||r.rm||paidOf(r));ensureRicM(s,t);return;}
     s.scadenzario=s.scadenzario.filter(r=>r.ric!==t.id||!r.rm||paidOf(r));
     for(let y=cy;y<=cy+2;y++){if(t.esclusi.includes(y))continue;
-    const mm=String(t.mese).padStart(2,"0"),dd=new Date(y,t.mese,0).getDate(),sc=lavAdj(`${y}-${mm}-${dd}`,t.lav);
+    /* v55: giorno anche per le annuali (giornoA; 0 = fine mese, come prima) */
+    const mm=String(t.mese).padStart(2,"0"),fm=new Date(y,t.mese,0).getDate(),gA=+t.giornoA||0,dd=String(gA>0?Math.min(gA,fm):fm).padStart(2,"0"),sc=lavAdj(`${y}-${mm}-${dd}`,t.lav);
     let r=s.scadenzario.find(x=>x.ric===t.id&&x.anno===y&&!x.rm);
     if(!r){r={id:`${t.id}-${y}`,voce:t.voce,anno:y,auto:"",tipo:"spesa",ric:t.id,frazione:1,meno:0,importo:null,scadenza:sc,pagato:false,forzaNonPagato:false,dataPag:"",...(t.adeb===false?{man:true}:{})};s.scadenzario.push(r);}
     else if(!r.pagato&&!(r.scadenza&&r.scadenza<=TODAY)){r.voce=t.voce;r.scadenza=sc;}
@@ -449,13 +450,13 @@ V.scadenzario=()=>{
   ${S.ricorrenti.map((t,i)=>`<tr><td class="r-voce">${inpT(`ricorrenti.${i}.voce`,"text","es. Bollo auto")}</td>
    <td class="r-freq" data-l="Ogni"><select class="in sel ricfreq" id="${idOf("ricorrenti."+i+".freq")}" data-i="ricorrenti.${i}.freq" data-k="sel" aria-label="Frequenza"><option value="a">anno</option><option value="m">mese</option></select></td>
    <td class="r-quando"><label class="r-q1"><span class="r-ql">${t.freq==="m"?"Giorno":"Mese"}</span>${t.freq==="m"?`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".giorno")}" data-i="ricorrenti.${i}.giorno" data-k="mese" aria-label="Giorno del mese">${Array.from({length:31},(_,k)=>`<option value="${k+1}">il ${k+1}</option>`).join("")}</select></label><label class="ricda">dal <input type="month" class="in ric-da" data-idx="${i}" value="${t.da||""}" aria-label="Primo mese"></label>`
-     :`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".mese")}" data-i="ricorrenti.${i}.mese" data-k="mese" aria-label="Mese">${MESI.map((m,k)=>`<option value="${k+1}">${m}</option>`).join("")}</select></label>`}</td>
-   <td class="r-lav" data-l="Se festivo"><select class="in sel" id="${idOf("ricorrenti."+i+".lav")}" data-i="ricorrenti.${i}.lav" data-k="sel" aria-label="Se il giorno cade di sabato, domenica o in un festivo">${[["","resta"],["dopo","slitta al giorno lavorativo dopo"],["prima","anticipa al giorno lavorativo prima"]].map(([v,l])=>`<option value="${v}" ${(t.lav||"")===v?"selected":""}>${l}</option>`).join("")}</select></td>
+     :`<select class="in sel mesesel" id="${idOf("ricorrenti."+i+".mese")}" data-i="ricorrenti.${i}.mese" data-k="mese" aria-label="Mese">${MESI.map((m,k)=>`<option value="${k+1}">${m}</option>`).join("")}</select></label><label class="r-q2"><span class="r-ql">Giorno</span><select class="in sel mesesel" id="${idOf("ricorrenti."+i+".giornoA")}" data-i="ricorrenti.${i}.giornoA" data-k="sel" aria-label="Giorno del mese"><option value="" ${!t.giornoA?"selected":""}>fine mese</option>${Array.from({length:31},(_,k)=>`<option value="${k+1}" ${+t.giornoA===k+1?"selected":""}>il ${k+1}</option>`).join("")}</select></label>`}</td>
+   <td class="r-lav" data-l="Se festivo"><select class="in sel" id="${idOf("ricorrenti."+i+".lav")}" data-i="ricorrenti.${i}.lav" data-k="sel" aria-label="Se il giorno cade di sabato, domenica o in un festivo">${[["","resta"],["dopo","giorno lavorativo dopo"],["prima","giorno lavorativo prima"]].map(([v,l])=>`<option value="${v}" ${(t.lav||"")===v?"selected":""}>${l}</option>`).join("")}</select></td>
    <td class="imp r-imp" data-l="Importo">${inp(`ricorrenti.${i}.importo`)}</td><td class="c r-var" data-l="Importo variabile">${inpT(`ricorrenti.${i}.variabile`,"checkbox")}</td><td class="c r-adeb" data-l="Addebito automatico">${inpT(`ricorrenti.${i}.adeb`,"checkbox")}</td>
    <td class="c r-del"><button class="icon-btn" data-act="del-ric" data-idx="${i}" aria-label="Elimina spesa fissa" ${READONLY?"disabled":""}>×</button></td></tr>`).join("")||`<tr><td colspan="8" class="muted">Nessuna spesa fissa.</td></tr>`}
   </tbody></table></div>
   <div class="actions"><button class="btn" data-act="add-ric" ${READONLY?"disabled":""}>+ Aggiungi spesa fissa</button></div>
-  <details class="more"><summary>Come funzionano le spese fisse</summary><p class="note">Spese fisse annuali: compaiono nello Scadenzario per quest'anno e i due successivi, all'ultimo giorno del mese scelto. Spese fisse mensili (es. affitto): una voce al mese, il giorno scelto, dal mese in cui le aggiungi fino a dicembre dell'anno prossimo (si allunga da sola). «Se festivo»: se il giorno cade di sabato, domenica o in una festività nazionale, l'addebito resta lì oppure slitta al primo giorno lavorativo dopo (o prima): cambia la data nello Scadenzario e, se passa al mese dopo, il mese in cui la spesa conta. «Addebito automatico» spuntato: la voce risulta pagata da sola alla scadenza. Tolto: resta «da pagare» finché non la segni pagata nello Scadenzario o finché nell'estratto conto non compare un pagamento che combacia (stesso importo nello stesso mese, o una controparte già collegata a questa spesa), che si collega da solo; vale per le scadenze future, quelle passate restano come sono; per saltare un mese elimina quella riga nello Scadenzario. Le spese con importo variabile (es. assicurazioni) si correggono anno per anno direttamente nella riga dello Scadenzario. Le spese fisse non sono debiti fiscali: non riducono il patrimonio netto, ma entrano nella previsione di cassa.</p></details>
+  <details class="more"><summary>Come funzionano le spese fisse</summary><p class="note">Spese fisse annuali: compaiono nello Scadenzario per quest'anno e i due successivi, nel mese e nel giorno scelti («fine mese» = ultimo giorno del mese). Spese fisse mensili (es. affitto): una voce al mese, il giorno scelto, dal mese in cui le aggiungi fino a dicembre dell'anno prossimo (si allunga da sola). «Se festivo»: se il giorno cade di sabato, domenica o in una festività nazionale, l'addebito resta lì oppure slitta al primo giorno lavorativo dopo (o prima): cambia la data nello Scadenzario e, se passa al mese dopo, il mese in cui la spesa conta. «Addebito automatico» spuntato: la voce risulta pagata da sola alla scadenza. Tolto: resta «da pagare» finché non la segni pagata nello Scadenzario o finché nell'estratto conto non compare un pagamento che combacia (stesso importo nello stesso mese, o una controparte già collegata a questa spesa), che si collega da solo; vale per le scadenze future, quelle passate restano come sono; per saltare un mese elimina quella riga nello Scadenzario. Le spese con importo variabile (es. assicurazioni) si correggono anno per anno direttamente nella riga dello Scadenzario. Le spese fisse non sono debiti fiscali: non riducono il patrimonio netto, ma entrano nella previsione di cassa.</p></details>
  </div>
 </section>`;
 };
@@ -1259,7 +1260,7 @@ view.addEventListener("click",e=>{
  else if(a==="del-scad"){const r=S.scadenzario[+b.dataset.idx];if(r&&r.ric){const t=S.ricorrenti.find(x=>x.id===r.ric),k=r.rm||r.anno;if(t&&!t.esclusi.includes(k))t.esclusi.push(k);}S.scadenzario.splice(+b.dataset.idx,1);}
  else if(a==="add-fm"){S.fondoMov.push({id:uid(),data:new Date().toLocaleDateString("sv-SE"),tipo:"acquisto",importo:null,nota:""});}
  else if(a==="del-fm"){S.fondoMov.splice(+b.dataset.idx,1);}
- else if(a==="add-ric"){S.ricorrenti.push({id:"f"+uid(),voce:"",mese:new Date().getMonth()+1,importo:null,variabile:false,esclusi:[],freq:"a",giorno:1,da:"",lav:"",adeb:true});ensureRic(S);}
+ else if(a==="add-ric"){S.ricorrenti.push({id:"f"+uid(),voce:"",mese:new Date().getMonth()+1,importo:null,variabile:false,esclusi:[],freq:"a",giorno:1,da:"",lav:"",adeb:true,giornoA:0});ensureRic(S);}
  else if(a==="del-ric"){const t=S.ricorrenti.splice(+b.dataset.idx,1)[0];if(t)S.scadenzario=S.scadenzario.filter(r=>r.ric!==t.id||paidOf(r));}
  else if(a==="gen-enpam"){if(!S.scadenzario.some(r=>r.anno===y&&(r.auto==="enpam"||(r.auto==="qa"&&r.frazione<1)))){
    S.scadenzario=S.scadenzario.filter(r=>r.pagato||!(r.auto==="qa"&&r.anno===y));
