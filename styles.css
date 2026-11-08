@@ -927,3 +927,29 @@ tr.proj td{font-style:italic;color:var(--muted)}tr.proj td span{opacity:.85}
 .mst-t.pj{border-style:dashed}.mst-t.pj .mst-mini i{opacity:.45}
 .mvr-ed .btn.sm{justify-self:start;white-space:normal;text-align:left}
 label.riclav{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)}label.riclav select{font-size:12px;padding:3px 6px;max-width:100%}
+/* v54: Spese fisse su telefono — una scheda per voce invece della tabella che scorre di lato */
+.r-ql{display:none}label.r-q1{display:block}table.ric td.r-quando{text-align:left}table.ric td.r-lav select{width:210px;min-width:0}table.ric th:nth-child(7){white-space:normal;line-height:1.2}
+@media (max-width:640px){
+ table.ric{min-width:0!important;width:100%}
+ table.ric thead{display:none}
+ table.ric,table.ric tbody{display:block}
+ table.ric tr{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;padding:12px;margin:0 0 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+ table.ric td{display:block;padding:0;border:0;min-width:0;text-align:left}
+ table.ric td[data-l]::before,.r-ql{content:attr(data-l);display:block;font-size:11px;letter-spacing:.03em;color:var(--muted);margin-bottom:3px}
+ table.ric td.r-voce{order:1;grid-column:1/3;padding-right:42px}
+ table.ric input.in.txt{min-width:0;width:100%;font-weight:600;font-size:15px}
+ table.ric td.r-del{order:0;position:absolute;top:13px;right:12px;z-index:2;width:auto}table.ric td.r-del .icon-btn{display:grid;place-items:center;background:var(--surface);color:var(--fg)}
+ table.ric td.r-freq{order:2}
+ table.ric td.r-quando{display:contents}
+ table.ric label.r-q1{order:3;display:block;min-width:0}
+ table.ric td.r-imp{order:4}
+ table.ric td.r-var{order:5;display:flex;flex-direction:column}
+ table.ric td.r-var input{width:22px;height:22px;margin:6px 0 0}
+ table.ric label.ricda{order:6;margin:0;display:block;min-width:0;font-size:11px;letter-spacing:.03em}
+ table.ric label.ricda input{display:block;width:100%;min-width:0;margin-top:3px}
+ table.ric td.r-adeb{order:7;display:flex;flex-direction:column}
+ table.ric td.r-adeb input{width:22px;height:22px;margin:6px 0 0}
+ table.ric td.r-lav{order:8;grid-column:1/3}
+ table.ric td.r-lav select{width:100%}
+ table.ric select.ricfreq,table.ric select.mesesel,table.ric td.r-imp input.in{width:100%}
+}
