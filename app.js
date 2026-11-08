@@ -2155,7 +2155,12 @@ function linkCands(m,tutti){const out=[],a=Math.abs(m.importo),mem=(S.linkMem||{
 /* movimenti per cui proporre un collegamento */
 const linkable=m=>m&&!movAbb()[m.id]&&!movPrest()[m.id]&&m.cat!==undefined&&!LINK_NOCAT.includes(m.cat||"")&&(m.importo<0||m.cat==="stipendio");
 const LINK_PROPCAT=["fisse","tasse","casa","straord","stipendio",""];
-function linkProp(m){if(!linkable(m)||!LINK_PROPCAT.includes(m.cat||"")||linkOf(m.id).length||linkNo(m.id))return null;const c=linkCands(m,false);return c.length&&c[0].sc>=1.2?c[0]:null;}
+/* v56: anche i movimenti di altre categorie (es. abbonamenti in «Altre spese quotidiane») si propongono se combaciano con una
+   spesa fissa (stesso importo ±1 cent vicino alla scadenza, o controparte già collegata a quella spesa) */
+function linkProp(m){if(!linkable(m)||linkOf(m.id).length||linkNo(m.id))return null;const pc=LINK_PROPCAT.includes(m.cat||"");if(!pc&&!(m.importo<0))return null;
+ const c=linkCands(m,false);if(!c.length)return null;const b=c[0];
+ if(pc)return b.sc>=1.2?b:null;
+ return b.k==="s"&&b.rs.length===1&&b.sc>=2.5&&(S.scadenzario.find(r=>r.id===b.rs[0])||{}).ric?b:null;}
 function linkSet(m,k,rs){S.link=(S.link||[]).filter(l=>l.m!==m.id);
  if(k==="x")S.link.push({m:m.id,k:"x",r:"",d:m.data,i:m.importo,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)});
  else if(k)rs.forEach(r=>S.link.push({m:m.id,k,r,d:m.data,i:k==="s"&&rs.length>1?0:m.importo,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)}));
@@ -2171,7 +2176,7 @@ function linkOpts(m){const ls=linkOf(m.id),curV=ls.length?ls[0].k+":"+ls.map(l=>
  if(ls.length&&!c.some(x=>x.k+":"+x.rs.join(",")===curV))o+=`<option value="${curV}" selected>↔ ${esc(linkLbl(ls))}</option>`;
  c.forEach(x=>{const v=x.k+":"+x.rs.join(",");if(seen.has(v))return;seen.add(v);o+=`<option value="${esc(v)}" ${v===curV?"selected":""}>${x.sc>=1.2?"★ ":""}${esc(x.lbl)}</option>`;});
  return o+`<option value="x" ${curV==="x"?"selected":""}>Non collegare</option>`;}
-const linkSel=m=>(linkable(m)&&LINK_PROPCAT.includes(m.cat||""))||linkOf(m.id).length?`<select class="in sel mv-link" data-id="${m.id}" aria-label="Collega a una voce" ${READONLY?"disabled":""}>${linkOpts(m)}</select>`:"";
+const linkSel=m=>(linkable(m)&&(LINK_PROPCAT.includes(m.cat||"")||m.importo<0))||linkOf(m.id).length?`<select class="in sel mv-link" data-id="${m.id}" aria-label="Collega a una voce" ${READONLY?"disabled":""}>${linkOpts(m)}</select>`:"";
 const linkTag=m=>{const ls=linkOf(m.id);return ls.length?`<span class="lk-tag" title="Collegato">↔ ${esc(linkLbl(ls))}</span>`:"";};
 /* riquadro «Da collegare» nel Resoconto mensile */
 function linkBox(ym){const d=movLoad();if(!d)return "";const P=[];d.movimenti.forEach(m=>{const p=linkProp(m);if(p)P.push([m,p]);});
