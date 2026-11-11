@@ -966,3 +966,58 @@ details.box.fold[open]>summary{margin-bottom:10px}
 .sp-r:last-child{border-bottom:0}.sp-r span{min-width:0}.sp-r small{display:block;color:var(--muted);font-size:11.5px}
 .sp-r b{font-family:var(--f-mono);white-space:nowrap;font-weight:600}
 .mc-help{margin-top:8px}
+
+/* ===== v58: Lavoro › Turni (piano del mese) ===== */
+.tu-n{--k:var(--inv)}.tu-f{--k:var(--tax)}.tu-a{--k:var(--ent-t)}.tu-fe{--k:var(--liq-t)}.tu-rc{--k:var(--muted)}.tu-x{--k:var(--fg)}
+.tu-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.tu-nav h3{margin:0;text-align:center;flex:1}
+.tu-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+.tu-tool{font:600 13px var(--f-body);padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--fg);cursor:pointer;min-height:34px}
+.tu-tool::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--k);margin-right:6px;vertical-align:1px}
+.tu-tool.on{background:color-mix(in srgb,var(--k) 24%,var(--surface));border-color:var(--k);box-shadow:inset 0 0 0 1px var(--k)}
+.tu-h{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.tu-h[hidden]{display:none}
+.tu-h .in{width:64px}
+.tu-hint{margin:4px 0 10px}
+.tu-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.tu-dw{text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:2px 0}
+.tu-dw.tu-fest{color:var(--tax)}
+.tu-c{display:flex;flex-direction:column;align-items:stretch;gap:2px;min-height:58px;padding:4px 3px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;cursor:pointer;text-align:left;min-width:0}
+.tu-c b{font-size:12px;font-weight:600;line-height:1.1}
+.tu-c.tu-fest{background:var(--surface-2)}
+.tu-c.tu-fest b{color:var(--tax)}
+.tu-c.tu-oggi{outline:2px solid var(--fg);outline-offset:-2px}
+.tu-c.tu-v{border:0;background:none;cursor:default;min-height:0}
+.tu-c:disabled{cursor:default}
+.tu-t{display:block;font-style:normal;font-size:10px;font-weight:600;line-height:1.4;padding:0 3px;border-radius:3px;color:var(--fg);background:color-mix(in srgb,var(--k) 30%,var(--surface));border-left:3px solid var(--k);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tu-sum{grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+table.tu-cmp td:not(:first-child),table.tu-cmp th:not(:first-child){text-align:right}
+@media (max-width:420px){.tu-c{min-height:52px;padding:3px 2px}.tu-t{font-size:9px;padding:0 2px;border-left-width:2px}.tu-g{gap:3px}}
+
+/* ===== v59: Lavoro › Orario e riposi, anno mese per mese, calendario del cartellino ===== */
+.o-wrap{overflow-x:auto}
+.o-ch{display:block;max-width:none}
+.o-ch text{font:10px var(--f-body);fill:var(--muted)}
+.o-ch .o48{stroke:var(--tax)!important}
+.o-ch rect.o-n{fill:var(--liq)}.o-ch rect.o-x{fill:var(--tax)}.o-ch rect.o-f{fill:var(--liq-t);opacity:.35}.o-ch rect.o-p{fill:var(--muted);opacity:.3}
+.o-ch rect.a-pj{opacity:.45}
+.o-leg{display:flex;flex-wrap:wrap;gap:4px 14px;margin:8px 0 4px}
+.o-leg li{display:flex;align-items:center;gap:6px;font-size:12px;border:0;padding:0}
+.o-leg li span{color:var(--muted)}
+.o-leg i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.o-leg i.o-n{background:var(--liq)}.o-leg i.o-x{background:var(--tax)}.o-leg i.o-f{background:var(--liq-t);opacity:.35}.o-leg i.o-p{background:var(--muted);opacity:.3}
+.o-leg i.a-pjl{background:var(--inv);opacity:.45}
+table.o-rip td:last-child,table.o-rip th:last-child{text-align:right}
+table.a-t td:not(:first-child),table.a-t th:not(:first-child){text-align:right}
+table.a-t tr.a-pjr td{color:var(--muted)}
+.ac-l{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:8px 16px}
+.ac-r{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.ac-r .in{width:84px;text-align:right}
+.tu-ro .tu-c{cursor:default}
+.tu-c.tu-diff{border-style:dashed;border-color:var(--tax)}
+.tu-o{margin-top:auto;font-size:10px;color:var(--muted);font-family:var(--f-mono,monospace)}
+details.lv-dt{margin-top:12px}
+table.a-t th,table.o-rip th,table.tu-cmp th{min-width:0}
+table.a-t th:first-child,table.o-rip th:first-child,table.tu-cmp th:first-child{min-width:0}
+@media (max-width:420px){table.a-t th,table.a-t td,table.o-rip th,table.o-rip td{padding:6px 5px}table.a-t td,table.o-rip td{font-size:12px}}
+.ac-r .in{min-width:0}

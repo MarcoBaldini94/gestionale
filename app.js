@@ -3,7 +3,7 @@
 /* ================= modello dati ================= */
 /* v46: versione dei dati scritta in ogni backup (S.appVer). Una copia dell'app più vecchia di quella che ha salvato
    l'ultimo backup sul PC non lo adotta e non lo sovrascrive (perderebbe i campi nuovi, es. i collegamenti): chiede di ricaricare. */
-const APP_VER=53;
+const APP_VER=55;
 const MESI=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const FONTI=[["lp","Libera professione","P.IVA forfettario"],["gm","Guardia medica","già tassata dall'ASL"],["ssn","Stipendio SSN","netto in busta"],["sond","Sondaggi","netto"],["spec","Borsa specializzazione","esente"],["ext","Entrate extra (dai conti)","dagli estratti conto"],["altro","Altro",""],["intra","Intramoenia / aggiuntiva","lordo dal cedolino, già nel netto SSN"]];
 const FONTI_Y=Y=>(+Y>=2027?["ssn","intra","sond","ext","altro"]:["lp","gm","ssn","intra","sond","spec","ext","altro"]).map(k=>FONTI.find(f=>f[0]===k));
@@ -22,7 +22,7 @@ const scadRow=(voce,anno,auto,frazione,scadenza)=>({id:uid(),voce,anno,auto:auto
 const isY=y=>/^\d{4}$/.test(String(y));
 
 function defaults(){const y=new Date().getFullYear();return{v:3,anni:{[y]:{...DEF_ANNO}},globali:{...DEF_GLOB},registro:[],patrimonio:{[y]:blankPat()},
-  chiusure:{},chiusureInv:{},movAbbNo:[],movNote:{},prestiti:[],straordNoMedia:true,fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[],patEstrF:[],patEstrI:[],link:[],linkMem:{}};}
+  chiusure:{},chiusureInv:{},movAbbNo:[],movNote:{},prestiti:[],straordNoMedia:true,fondo:{capitale:null},etfBase:null,prev:{entrate:null,spese:null,inv:null},gen:[],ricorrenti:[],fondoMov:[],scadenzario:["qa","qb","imp"].map(a=>scadRow(AUTO_LBL[a]+" "+y,y,a)),accantonato:null,sondExt:null,ced:null,movCond:["spesa","svago"],sondCanali:{},vincolato:{fineco:[]},patEstr:[],patEstrF:[],patEstrI:[],link:[],linkMem:{},turni:{},aggCert:{}};}
 
 /* conversione dal formato del foglio (v1/v2): mesi → registro movimenti, parametri → tabella per anno */
 function migrate(o){
@@ -87,6 +87,9 @@ function sanitize(s){
    rest:(Array.isArray(p.rest)?p.rest:[]).filter(r=>r&&dOk(r.data)&&num(r.importo)>0).map(r=>({id:str(r.id)||uid(),data:r.data,importo:Math.round(num(r.importo)*100)/100,mov:str(r.mov).slice(0,40)})),
    no:(Array.isArray(p.no)?p.no:[]).filter(x=>typeof x==="string").slice(-200)}));
   o.straordNoMedia=s.straordNoMedia!==false;
+  o.aggCert={};if(s.aggCert&&typeof s.aggCert==="object")Object.entries(s.aggCert).forEach(([k,v])=>{const x=num(v);if(/^\d{4}-\d{2}$/.test(k)&&x!=null&&x>=0&&x<=300)o.aggCert[k]=x;});
+  o.turni={};if(s.turni&&typeof s.turni==="object")Object.keys(s.turni).filter(k=>dOk(k)).sort().slice(-1500).forEach(k=>{const v=s.turni[k];if(!v||typeof v!=="object")return;const t={};
+   ["n","f","fe","rc"].forEach(f=>{if(v[f])t[f]=1;});const a=num(v.a);if(a!=null&&a>0&&a<=24)t.a=Math.round(a*100)/100;if(Object.keys(t).length)o.turni[k]=t;});
   o.movCond=Array.isArray(s.movCond)?s.movCond.filter(k=>["casa","spesa","svago","viaggi","carburante","vita","straord"].includes(k)):["spesa","svago"];
   o.ricorrenti=(Array.isArray(s.ricorrenti)?s.ricorrenti:[]).filter(t=>t&&typeof t==="object").map(t=>({id:str(t.id)||uid(),voce:str(t.voce),
     mese:Math.min(12,Math.max(1,num(t.mese)??1)),importo:num(t.importo),variabile:t.variabile===true,esclusi:(Array.isArray(t.esclusi)?t.esclusi:[]).filter(y=>typeof y==="number"||/^\d{4}-\d{2}$/.test(y)),
@@ -372,11 +375,11 @@ const yearBar=()=>`<div class="years" role="group" aria-label="Anno">${allYears(
 
 /* ================= schede ================= */
 const TABS=[["home","Home"],["dashboard","Finanze"],["patrimonio","Patrimonio"],["scadenzario","Scadenzario"],["entrate","Entrate"],["tasse","Tasse"],["risparmio","Andamento"],["mese","Resoconto mensile"],["parametri","Parametri"],
- ["lavoro","Lavoro"],["presenze","Presenze e ferie"],["lv-pag","Guardie e aggiuntiva"],["cedolini","Cedolini"],
+ ["lavoro","Lavoro"],["turni","Turni"],["lv-ora","Orario e riposi"],["presenze","Presenze e ferie"],["lv-pag","Guardie e aggiuntiva"],["cedolini","Cedolini"],
  ["sondaggi","Sondaggi"],["collegamenti","Collegamenti e backup"]];
 /* tre sezioni (Lavoro, Finanze, Sondaggi), ognuna con la sua dashboard; ogni scheda torna alla dashboard della sua sezione */
 const DASHES=["dashboard","lavoro","sondaggi"];
-const PARENT={dashboard:"home",lavoro:"home",sondaggi:"home",collegamenti:"home",presenze:"lavoro","lv-pag":"lavoro",cedolini:"lavoro"};
+const PARENT={dashboard:"home",lavoro:"home",sondaggi:"home",collegamenti:"home",turni:"lavoro","lv-ora":"lavoro",presenze:"lavoro","lv-pag":"lavoro",cedolini:"lavoro"};
 const parentOf=t=>PARENT[t]||(t==="home"?null:"dashboard");
 const V={};
 
@@ -642,10 +645,9 @@ V.risparmio=()=>{const PY=R.PY;return `<section class="sheet">
 const IRPEF_SC=[[28000,.23],[50000,.33],[Infinity,.43]];
 const irpefMarg=x=>(IRPEF_SC.find(([l])=>x<l)||IRPEF_SC[2])[1];
 const p2=n_=>String(n_).padStart(2,"0");
-let PROJ={r:null,v:null};
-function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
- let last=null;Object.keys(R.svAll||{}).sort().forEach(Y=>R.svAll[Y].risp.forEach((v,i)=>{if(v!=null)last=`${Y}-${p2(i+1)}`;}));
- if(!last)return null;
+/* v58: parametri dei cedolini verificati, condivisi da proj() e dalla sezione Lavoro (netto stimato di guardie e aggiuntiva) */
+let CEDP={r:undefined,v:null};
+function cedParams(){if(CEDP.r===S.ced&&CEDP.v)return CEDP.v;
  const ced=(S.ced?S.ced.lista:[]).filter(c=>c.controllo&&c.controllo.ok).sort((a,b)=>a.periodo.localeCompare(b.periodo)),cl=ced[ced.length-1];
  const comp=(c,f)=>sum(c.voci.filter(v=>v.categoria==="competenza"&&f(v)).map(v=>+v.importo||0)),cat=(c,k)=>sum(c.voci.filter(v=>v.categoria===k).map(v=>+v.importo||0));
  let F=0,cR=0,netFix=null;const impY={};
@@ -655,6 +657,16 @@ function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
   const m0=irpefMarg(impY[(cl.dataPagamento||cl.periodo).slice(0,4)]||0);
   if(net!=null)netFix=net-V*(1-cR)*(1-m0)-(P-cat(cl,"sostitutiva"));}
  const ass=(ced.find(c=>c.dataAssunzione)||{}).dataAssunzione||"";
+ CEDP={r:S.ced,v:{ced,cl,F,cR,netFix,impY,ass,ok:!!cl}};return CEDP.v;}
+/* netto stimato di un compenso del cartellino pagato nel mese ymPag: guardia − contributi − IRPEF allo scaglione
+   marginale dell'imponibile dell'anno da cedolini; aggiuntiva − 15% di imposta sostitutiva. null senza cedolini. */
+function lavNetto(tipo,lordo,ymPag){const P=cedParams();if(!P.ok||!(lordo>0))return tipo==="aggiuntiva"&&lordo>0?lordo*0.85:null;
+ if(tipo==="aggiuntiva")return lordo*0.85;const m=irpefMarg(P.impY[(ymPag||TODAY).slice(0,4)]||0);return lordo*(1-P.cR)*(1-m);}
+let PROJ={r:null,v:null};
+function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
+ let last=null;Object.keys(R.svAll||{}).sort().forEach(Y=>R.svAll[Y].risp.forEach((v,i)=>{if(v!=null)last=`${Y}-${p2(i+1)}`;}));
+ if(!last)return null;
+ const {F,cR,netFix,impY,ass}=cedParams();
  const CP=cartPagamenti(),cart=(S.cart?S.cart.lista:[]).slice().sort((a,b)=>a.periodo.localeCompare(b.periodo)),c3=cart.slice(-3),lastCart=cart.length?cart[cart.length-1].periodo:"";
  const avgH=k=>c3.length?sum(c3.map(c=>k==="g"?(c.tz.notte.mese+c.tz.fest.mese)/60:c.agg/60))/c3.length:0;
  /* spese variabili: ultimi 3 mesi con resoconto, senza straordinarie */
@@ -674,7 +686,9 @@ function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
    const arr=CP.righe.filter(r=>r.stato==="attesa"&&r.atteso===ym&&r.stima!=null),ref=ymAdd(ym,-2),noCart=ref>lastCart;
    const add=(tipo,lordo,lbl)=>{if(!(lordo>0))return;if(tipo==="guardia"){const imp=lordo*(1-cR),m=irpefMarg(cum[Y]);cum[Y]+=imp;E.push(["Guardie",imp*(1-m),lbl+` · lordo ${fmt(lordo)}, IRPEF ${Math.round(m*100)}%`]);}
     else E.push(["Attività aggiuntiva",lordo*0.85,lbl+` · lordo ${fmt(lordo)}, sostitutiva 15%`]);};
+   const pt=noCart?pianoMese(ref):null;
    if(arr.length)arr.forEach(r=>add(r.tipo,r.stima,`${MESI[+r.periodo.slice(5)-1].toLowerCase()}: ${hmF(r.ore)} h`));
+   else if(pt&&pt.lav){const mr=MESI[+ref.slice(5)-1].toLowerCase();add("guardia",pt.oreG*(CP.tG||0),`piano turni di ${mr}: ${hmF(pt.oreG)} h`);add("aggiuntiva",pt.a*(CP.tA||0),`piano turni di ${mr}: ${hmF(pt.a)} h`);}
    else if(noCart&&c3.length){add("guardia",avgH("g")*(CP.tG||0),`media ultimi ${c3.length} mesi`);add("aggiuntiva",avgH("a")*(CP.tA||0),`media ultimi ${c3.length} mesi`);}
    if(mo===12&&F>0){let k=12;if(ass.slice(0,4)===Y){const am=+ass.slice(5,7),ad=+ass.slice(8,10),dim=new Date(+Y,am,0).getDate();k=12-am+(dim-ad+1>=15?1:0);}
     const lordo=F*k/12,imp=lordo*(1-cR),m=irpefMarg(cum[Y]);cum[Y]+=imp;E.push(["Tredicesima",imp*(1-m),`${k}/12 delle voci fisse (${fmt(F)}) · lordo ${fmt(lordo)}, IRPEF ${Math.round(m*100)}%`]);
@@ -703,7 +717,7 @@ function projBox(ym){const P=proj();if(!P||!P.mesi.length)return "";
  if(!L.length)return "";
  return `<div class="box" id="pj-box"><h3>Dettaglio della stima <small>${ml(ym).toLowerCase()} · surplus previsto ${fmt(tot,"sign")}</small></h3>
   <div class="pj-g">${L.map(card).join("")}</div>
-  <details class="more"><summary>Come è calcolata</summary><p class="note">Stima, non dati reali: i mesi stimati sono chiari e tratteggiati qui e nel grafico dell'Andamento. Diventano reali quando ci sono i saldi di fine mese in Patrimonio. <b>Stipendio</b>: netto dell'ultimo cedolino senza la parte di guardie e aggiuntiva (${P.netFix!=null?fmt(P.netFix):"—"}); se il cedolino del mese è già arrivato si usa quello. <b>Guardie e aggiuntiva</b>: ore dei cartellini pagate due mesi dopo, alla tariffa dell'ultimo cedolino; guardie al netto dei contributi (${fmt(P.cR,"pct1")}) e dell'IRPEF allo scaglione stimato (23/33/43%, senza detrazioni); aggiuntiva al netto dell'imposta sostitutiva del 15%; senza cartellino, media delle ore degli ultimi 3 mesi. <b>Tredicesima</b> (dicembre): voci fisse × mesi di servizio / 12. <b>Sondaggi</b>: media degli ultimi 3 mesi. <b>Uscite</b>: tasse e spese fisse in scadenza nello Scadenzario + spese variabili = media delle spese di vita di ${P.l3.map(ym=>MESI[+ym.slice(5)-1].slice(0,3).toLowerCase()).join(", ")} senza le spese straordinarie. <b>Prestiti</b>: quelli datati nel mese sono uscite, le restituzioni segnate con una data futura sono entrate. Non entrano: addizionali IRPEF dell'anno prima, conguaglio di fine anno, investimenti.</p></details></div>`;}
+  <details class="more"><summary>Come è calcolata</summary><p class="note">Stima, non dati reali: i mesi stimati sono chiari e tratteggiati qui e nel grafico dell'Andamento. Diventano reali quando ci sono i saldi di fine mese in Patrimonio. <b>Stipendio</b>: netto dell'ultimo cedolino senza la parte di guardie e aggiuntiva (${P.netFix!=null?fmt(P.netFix):"—"}); se il cedolino del mese è già arrivato si usa quello. <b>Guardie e aggiuntiva</b>: ore dei cartellini pagate due mesi dopo, alla tariffa dell'ultimo cedolino (se il cartellino non c'è ancora, le ore del piano in Lavoro › Turni); guardie al netto dei contributi (${fmt(P.cR,"pct1")}) e dell'IRPEF allo scaglione stimato (23/33/43%, senza detrazioni); aggiuntiva al netto dell'imposta sostitutiva del 15%; senza cartellino né piano, media delle ore degli ultimi 3 mesi. <b>Tredicesima</b> (dicembre): voci fisse × mesi di servizio / 12. <b>Sondaggi</b>: media degli ultimi 3 mesi. <b>Uscite</b>: tasse e spese fisse in scadenza nello Scadenzario + spese variabili = media delle spese di vita di ${P.l3.map(ym=>MESI[+ym.slice(5)-1].slice(0,3).toLowerCase()).join(", ")} senza le spese straordinarie. <b>Prestiti</b>: quelli datati nel mese sono uscite, le restituzioni segnate con una data futura sono entrate. Non entrano: addizionali IRPEF dell'anno prima, conguaglio di fine anno, investimenti.</p></details></div>`;}
 /* ================= v51: spese straordinarie con nota ================= */
 const movNota=id=>(S.movNote||{})[id]||"";
 function strBox(Y){const d=movLoad();if(!d)return "";const AB=movAbb(),PR=movPrest();
@@ -1716,7 +1730,7 @@ function cartPagamenti(){
   return{periodo:c.periodo,tipo,ore,stima,pag,atteso,stato};};
  const out=[];(S.cart?S.cart.lista:[]).forEach(c=>{
   const g=(c.tz.notte.mese+c.tz.fest.mese)/60;if(g>0)out.push(riga(c,"guardia",g,isGuardia,tG));
-  if(c.agg>0)out.push(riga(c,"aggiuntiva",c.agg/60,isAggiuntiva,tA));});
+  {const ao=aggOre(c);if(ao>0)out.push(Object.assign(riga(c,"aggiuntiva",ao,isAggiuntiva,tA),{cert:(S.aggCert||{})[c.periodo]!=null}));}});
  return{righe:out,tG,tA};}
 /* ore di recupero usate nel mese: residuo prec. + saldo − residuo (null se manca il mese prima) */
 function cartUsate(L,y){const i=L.indexOf(y);if(y.recupero==null||y.fatto==null||y.dovuto==null)return null;
@@ -1726,7 +1740,7 @@ const STATO_L={ok:['ok',"pagato"],pagato:['ok',"pagato"],meno:['',"pagate meno o
 let CART_SEL=null;
 function lavPage(mode){const c=S.cart,L=c?c.lista:[];
  const head=`<div class="sheet-h"><h2>${mode==="pag"?"Guardie e aggiuntiva":"Presenze e ferie"}</h2><p>${mode==="pag"?"Guardie e attività aggiuntiva dai cartellini, confrontate con quanto pagato nei cedolini. Dati":"Ore, recupero e ferie"} dai cartellini presenze nella cartella OneDrive «Assistente Finanziario/Cartellini». La lettura avviene sul PC di casa (Hub); qui arrivano solo orari, causali e totali, senza dati anagrafici.</p></div>
- <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button>${mode==="pag"?'<a class="btn ghost" href="#cedolini">Cedolini</a>':'<a class="btn ghost" href="#lv-pag">Guardie e aggiuntiva</a>'}</div>
+ <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button>${mode==="pag"?'<a class="btn ghost" href="#cedolini">Cedolini</a>':'<a class="btn ghost" href="#lv-pag">Guardie e aggiuntiva</a>'}<a class="btn ghost" href="#turni">Turni</a><a class="btn ghost" href="#lv-ora">Orario e riposi</a></div>
  <p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>`;
  const errs=c&&(c.errori.length||L.some(x=>!x.ok))?`<div class="box c-tax"><h3>Da controllare</h3>${L.filter(x=>!x.ok).map(x=>`<p class="note"><b>${esc(x.file)}</b> (${MESE_L(x.periodo)}): le somme dei giorni non tornano con i totali stampati. I numeri di questo mese vanno verificati sul PDF.</p>`).join("")}
   ${c.errori.map(e=>`<p class="note"><b>${esc(e.file)}</b>: non leggibile (${esc(e.errore)}).</p>`).join("")}</div>`:"";
@@ -1734,7 +1748,9 @@ function lavPage(mode){const c=S.cart,L=c?c.lista:[];
  if(!CART_SEL||!L.some(x=>x.periodo===CART_SEL))CART_SEL=L[L.length-1].periodo;
  const x=L.find(y=>y.periodo===CART_SEL),last=L[L.length-1];
  const P=cartPagamenti(),inArrivo=P.righe.filter(r=>r.stato==="attesa"),daVerif=P.righe.filter(r=>["meno","piu","manca"].includes(r.stato));
- const totArr=inArrivo.reduce((a,r)=>a+(r.stima||0),0);
+ const totArr=inArrivo.reduce((a,r)=>a+(r.stima||0),0),netOf=r=>r.stima!=null?lavNetto(r.tipo,r.stima,r.atteso):null,totArrN=sum(inArrivo.map(r=>netOf(r)||0));
+ const pMesi=[...new Set(Object.keys(S.turni||{}).map(k=>k.slice(0,7)))].filter(m=>m>last.periodo).sort().map(pianoMese).filter(q=>q.lav).map(q=>Object.assign(q,{$:pianoSoldi(q)}));
+ const fProg=ferieProgr();
  const saldo=x.fatto!=null&&x.dovuto!=null?x.fatto-x.dovuto:null;
  const fer=last.ferie,ferRes=fer.tot!=null?fer.tot:fer.co.residuo+fer.fs.residuo+fer.ap.residuo;
  const anno=last.periodo.slice(0,4),Lanno=L.filter(y=>y.periodo.startsWith(anno));
@@ -1745,7 +1761,7 @@ function lavPage(mode){const c=S.cart,L=c?c.lista:[];
  /* pagamenti */
  const tipoL={guardia:"Guardia",aggiuntiva:"Aggiuntiva"};
  const pRows=P.righe.slice().reverse().map(r=>{const [cls,lab]=STATO_L[r.stato];
-  return `<tr><td>${MESE_L(r.periodo)}</td><td>${tipoL[r.tipo]}</td><td>${hm(Math.round(r.ore*60))}</td><td>${r.stima!=null?fmt(r.stima):"—"}</td><td>${r.pag?fmt(r.pag.importo)+(r.pag.ore!=null?`<br><small class="muted">${fN.format(r.pag.ore)} h · cedolino di ${r.pag.ced.map(MESE_L).join(", ").toLowerCase()}</small>`:""):`<small class="muted">atteso con il cedolino di ${MESE_L(r.atteso).toLowerCase()}</small>`}</td><td><span class="chip ${cls}">${lab}</span></td></tr>`;}).join("");
+  return `<tr><td>${MESE_L(r.periodo)}</td><td>${tipoL[r.tipo]}</td><td>${hm(Math.round(r.ore*60))}${r.cert?'<br><small class="muted">certificate</small>':""}</td><td>${r.stima!=null?fmt(r.stima)+(r.stato==="attesa"&&netOf(r)!=null?`<br><small class="muted">netto ≈ ${fmt(netOf(r))}</small>`:""):"—"}</td><td>${r.pag?fmt(r.pag.importo)+(r.pag.ore!=null?`<br><small class="muted">${fN.format(r.pag.ore)} h · cedolino di ${r.pag.ced.map(MESE_L).join(", ").toLowerCase()}</small>`:""):`<small class="muted">atteso con il cedolino di ${MESE_L(r.atteso).toLowerCase()}</small>`}</td><td><span class="chip ${cls}">${lab}</span></td></tr>`;}).join("");
  /* giorni del mese selezionato */
  const cl=(cod)=>x.causali[cod]||cod;
  const days=x.giorni.map(g=>{const tags=[];
@@ -1758,14 +1774,18 @@ function lavPage(mode){const c=S.cart,L=c?c.lista:[];
  return mode==="pag"?`<section class="sheet">${head}${errs}
  <div class="hero">
   <div class="tile t-tax"><span class="l">In arrivo nei prossimi cedolini</span><span class="v">${fmt(totArr)}</span><span class="s">lordo stimato: ${inArrivo.length?inArrivo.map(r=>tipoL[r.tipo].toLowerCase()+" "+MESE_L(r.periodo).slice(0,3).toLowerCase()).join(", "):"niente in sospeso"}</span></div>
+  ${inArrivo.length?`<div class="tile t-liq"><span class="l">Netto stimato in arrivo</span><span class="v">${fmt(totArrN)}</span><span class="s">guardie − contributi e IRPEF · aggiuntiva − 15%</span></div>`:""}
+  ${pMesi.length?`<div class="tile"><span class="l">Dal piano turni</span><span class="v">${fmt(sum(pMesi.map(q=>q.$.netto||0)))}</span><span class="s">netto stimato, ${pMesi.map(q=>MESE_L(q.ym).slice(0,3).toLowerCase()).join(", ")} (cartellino non ancora letto) · <a href="#turni">Turni</a></span></div>`:""}
  </div>
  ${daVerif.length?`<div class="box c-tax"><h3>Pagamenti da verificare</h3>${daVerif.map(r=>`<p class="note"><b>${tipoL[r.tipo]} di ${MESE_L(r.periodo).toLowerCase()}</b>: ${r.stato==="manca"?`nel cedolino di ${MESE_L(r.atteso).toLowerCase()} non c'è (${hm(Math.round(r.ore*60))} ore dal cartellino).`:`pagate ${fN.format(r.pag.ore)} ore, dal cartellino ne risultano ${fN.format(oreDec(Math.round(r.ore*60)))}.`}</p>`).join("")}</div>`:""}
   <div class="box"><h3>Guardie e aggiuntiva · ${anno}</h3><dl class="kv">
    ${kv("Notti di guardia",String(notti))}${kv("Guardie festive diurne",String(fest))}${kv("Ore di attività aggiuntiva",hm(aggA))}
    ${kv("Tariffa guardia (ultimo cedolino)",P.tG!=null?fmt(P.tG)+"/h":"—")}${kv("Tariffa aggiuntiva (ultimo cedolino)",P.tA!=null?fmt(P.tA)+"/h":"—")}</dl>
-   <p class="note">Guardie e aggiuntiva di un mese si pagano di norma con il cedolino di due mesi dopo. Ore di guardia = ore gettone notturne + festive del cartellino. Le ore di aggiuntiva pagate sono quelle certificate nel report della U.O.C. Libera Professione, che può arrotondare rispetto alle timbrature.</p></div>
+   <p class="note">Guardie e aggiuntiva di un mese si pagano di norma con il cedolino di due mesi dopo. Ore di guardia = ore gettone notturne + festive del cartellino. Le ore di aggiuntiva pagate sono quelle certificate nel report della U.O.C. Libera Professione, che può arrotondare rispetto alle timbrature. Netto stimato: guardie meno contributi (aliquota dall'ultimo cedolino) e IRPEF allo scaglione dell'imponibile dell'anno, senza detrazioni; aggiuntiva meno l'imposta sostitutiva del 15%.</p></div>
  <div class="box"><h3>Pagamenti di guardie e aggiuntiva</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese lavorato</th><th>Voce</th><th>Ore</th><th>Atteso (lordo)</th><th>Pagato</th><th></th></tr></thead><tbody>${pRows||'<tr><td colspan="6" class="muted">Nessuna guardia o attività aggiuntiva nei cartellini letti.</td></tr>'}</tbody></table></div>
-  <p class="note">Atteso = ore × tariffa dell'ultimo cedolino. «In arrivo» finché non c'è il cedolino di due mesi dopo; poi il confronto è con le ore pagate (scarto fino a 15 minuti considerato arrotondamento).</p></div>
+  <p class="note">Atteso = ore × tariffa dell'ultimo cedolino (per l'aggiuntiva le ore certificate, se le hai scritte sotto). «In arrivo» finché non c'è il cedolino di due mesi dopo; poi il confronto è con le ore pagate (scarto fino a 15 minuti considerato arrotondamento).</p></div>
+ ${annoBox(anno)}
+ ${aggCertBox(L)}
 </section>`:`<section class="sheet">${head}${errs}
  <div class="hero">
   <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}</span></div>
@@ -1773,15 +1793,202 @@ function lavPage(mode){const c=S.cart,L=c?c.lista:[];
   <div class="tile t-liq"><span class="l">Ferie residue</span><span class="v">${nGg(ferRes)}</span><span class="s">congedo ${fN.format(fer.co.residuo)} · festività soppresse ${fN.format(fer.fs.residuo)}${fer.ap.residuo?" · anni prec. "+fN.format(fer.ap.residuo):""} (a ${MESE_L(last.periodo).toLowerCase()})</span></div>
  </div>
   <div class="box"><h3>Ferie ${anno}</h3><dl class="kv">
-   ${kv("Congedo ordinario spettante",nGg(fer.co.spettanti))}${kv("Goduti",nGg(fer.co.fruiti))}${kv("Festività soppresse residue",nGg(fer.fs.residuo))}${fer.ap.residuo?kv("Residuo anni precedenti",nGg(fer.ap.residuo)):""}${kv("Residue totali",nGg(ferRes))}</dl>
+   ${kv("Congedo ordinario spettante",nGg(fer.co.spettanti))}${kv("Goduti",nGg(fer.co.fruiti))}${kv("Festività soppresse residue",nGg(fer.fs.residuo))}${fer.ap.residuo?kv("Residuo anni precedenti",nGg(fer.ap.residuo)):""}${kv("Residue totali",nGg(ferRes))}${fProg.length?kv(`Programmate nel piano <small>dopo ${MESE_L(last.periodo).toLowerCase()}</small>`,nGg(fProg.length))+kv("Residue dopo il piano",`<b>${nGg(ferRes-fProg.length)}</b>`,"strong"):""}</dl>
    <p class="note">${Lanno.filter(y=>y.ferieGiorni.length).map(y=>MESE_L(y.periodo)+": "+y.ferieGiorni.join(", ")).join(" · ")||"Nessun giorno di ferie nei cartellini letti."}</p></div>
  <div class="box"><h3>Mesi</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Fatte</th><th>Dovute</th><th>Saldo mese</th><th>Recuperate</th><th>Residuo</th><th>Notti</th><th>Festive</th><th>Aggiuntiva</th><th>Ferie</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   <p class="note">Il residuo di recupero ore si muove così: residuo del mese prima + saldo del mese − ore recuperate con riposo (causale 9018, «recupero ore dirigenza»). Il saldo del mese, quindi, non coincide col residuo nei mesi in cui hai preso giorni di recupero. I giorni di riposo compensativo dopo una guardia festiva (9013) sono già nel saldo, come le ore mancanti il giorno prima di una notte. Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
- <div class="box" id="lv-giorni"><h3>Giorni di ${MESE_L(x.periodo).toLowerCase()}${x.calcolo?` <small class="muted">· calcolo del ${dIt(x.calcolo.slice(0,10))}</small>`:""}</h3><div class="tbl-wrap flat"><table class="lv-days"><thead><tr><th>Giorno</th><th>Timbrature</th><th>Causali</th><th>Ore</th><th>Ecc./car.</th></tr></thead><tbody>${days}</tbody></table></div>
-  <p class="note"><span class="lv-ta">In corsivo</span> le timbrature di attività aggiuntiva. Le notti iniziano alle 20 e finiscono il mattino dopo: le ore compaiono sul giorno di uscita.</p></div>
+ <div class="box" id="lv-giorni"><h3>Giorni di ${MESE_L(x.periodo).toLowerCase()}${x.calcolo?` <small class="muted">· calcolo del ${dIt(x.calcolo.slice(0,10))}</small>`:""}</h3>${cartCal(x)}
+  <details class="more lv-dt"><summary>Timbrature giorno per giorno</summary><div class="tbl-wrap flat"><table class="lv-days"><thead><tr><th>Giorno</th><th>Timbrature</th><th>Causali</th><th>Ore</th><th>Ecc./car.</th></tr></thead><tbody>${days}</tbody></table></div></details>
+  <p class="note">N notte (sul giorno in cui inizia), F guardia festiva, A aggiuntiva, Fe ferie, R recupero; in basso le ore del giorno. ${Object.keys(S.turni||{}).some(k=>k.startsWith(x.periodo))?"Bordo tratteggiato = diverso dal piano turni. ":""}<span class="lv-ta">In corsivo</span> le timbrature di attività aggiuntiva. Le notti iniziano alle 20 e finiscono il mattino dopo: le ore compaiono sul giorno di uscita.</p></div>
 </section>`;}
 V.presenze=()=>lavPage("presenze");
 V["lv-pag"]=()=>lavPage("pag");
+/* ================= v58: piano dei turni (ex tracker React) =================
+   S.turni {"YYYY-MM-DD": {n:1 guardia notturna (giorno in cui inizia), f:1 guardia festiva diurna, a:ore di aggiuntiva,
+   fe:1 ferie, rc:1 recupero ore}}. Serve a stimare ore e compensi PRIMA del cartellino (che arriva a fine mese e viene
+   pagato due mesi dopo) e a confrontarli poi con quanto timbrato. Ore medie per notte/festiva/giornata di aggiuntiva
+   ricavate dai cartellini letti (12 h / 12 h / 4 h se non ce ne sono). */
+const TU_K=[["n","Notte","lv-n"],["f","Festiva","lv-f"],["a","Aggiuntiva","lv-a"],["fe","Ferie","lv-fe"],["rc","Recupero",""]];
+const TU_S={n:"N",f:"F",a:"A",fe:"Fe",rc:"R"};
+let TU_M=null,TU_T="n",TU_H=null;
+const q25=v=>Math.round(v*4)/4;
+function turniOre(){const L=S.cart?S.cart.lista:[],sm=f=>sum(L.map(f));
+ const nN=sm(c=>c.notti.length),nF=sm(c=>c.festive.length),nA=sm(c=>c.aggGiorni.length);
+ return{hN:nN?q25(sm(c=>c.tz.notte.mese)/nN/60):12,hF:nF?q25(sm(c=>c.tz.fest.mese)/nF/60):12,hA:nA?q25(sm(c=>c.agg)/nA/60):4,daCart:nN+nF+nA>0};}
+function pianoMese(ym){const H=turniOre(),o={ym,n:0,f:0,a:0,fe:[],rc:[],giorni:0};
+ Object.keys(S.turni||{}).filter(k=>k.startsWith(ym)).forEach(k=>{const t=S.turni[k],g=+k.slice(8);o.giorni++;
+  if(t.n)o.n++;if(t.f)o.f++;if(t.a)o.a+=t.a;if(t.fe)o.fe.push(g);if(t.rc)o.rc.push(g);});
+ o.oreN=o.n*H.hN;o.oreF=o.f*H.hF;o.oreG=o.oreN+o.oreF;o.lav=o.n+o.f+o.a>0;return o;}
+/* compenso stimato di un mese di piano: lordo alla tariffa dell'ultimo cedolino, netto come in proj() */
+function pianoSoldi(p){const CP=cartPagamenti(),pag=ymAdd(p.ym,2);
+ const gL=CP.tG!=null?p.oreG*CP.tG:null,aL=CP.tA!=null?p.a*CP.tA:null;
+ const gN=gL!=null?lavNetto("guardia",gL,pag):null,aN=aL!=null?lavNetto("aggiuntiva",aL,pag):null;
+ return{gL,aL,gN,aN,lordo:(gL||0)+(aL||0),netto:gN!=null||aN!=null?(gN||0)+(aN||0):null,pag,tG:CP.tG,tA:CP.tA};}
+/* ferie programmate nel piano dopo l'ultimo cartellino letto */
+function ferieProgr(){const L=S.cart?S.cart.lista:[],last=L.length?L[L.length-1].periodo:"";
+ return Object.keys(S.turni||{}).filter(k=>S.turni[k].fe&&k.slice(0,7)>last).sort();}
+const TU_DOW=["L","M","M","G","V","S","D"];
+V.turni=()=>{const H=turniOre();if(!TU_M)TU_M=TODAY.slice(0,7);if(TU_H==null)TU_H=H.hA;
+ const ym=TU_M,Y=+ym.slice(0,4),M=+ym.slice(5),dim=new Date(Y,M,0).getDate(),off=(new Date(Y,M-1,1).getDay()+6)%7;
+ const p=pianoMese(ym),$=pianoSoldi(p),cart=(S.cart?S.cart.lista:[]).find(c=>c.periodo===ym);
+ let cells="";for(let i=0;i<off;i++)cells+=`<span class="tu-c tu-v" aria-hidden="true"></span>`;
+ for(let g=1;g<=dim;g++){const d=`${ym}-${p2(g)}`,t=(S.turni||{})[d]||{},fest=festivo(new Date(Y,M-1,g));
+  const tags=TU_K.filter(([k])=>t[k]).map(([k,,c])=>`<i class="tu-t tu-${k}">${TU_S[k]}${k==="a"?" "+hmF(t.a):""}</i>`).join("");
+  const lab=`${g} ${MESI[M-1].toLowerCase()}`+(TU_K.filter(([k])=>t[k]).map(([k,l])=>", "+l.toLowerCase()+(k==="a"?" "+hmF(t.a)+" ore":"")).join(""));
+  cells+=`<button class="tu-c${fest?" tu-fest":""}${d===TODAY?" tu-oggi":""}" data-act="tu-day" data-d="${d}" aria-label="${esc(lab)}" ${READONLY?"disabled":""}><b>${g}</b>${tags}</button>`;}
+ const tool=TU_K.map(([k,l])=>`<button class="tu-tool tu-${k}${TU_T===k?" on":""}" data-act="tu-tool" data-t="${k}" aria-pressed="${TU_T===k}">${l}</button>`).join("")+`<button class="tu-tool tu-x${TU_T==="x"?" on":""}" data-act="tu-tool" data-t="x" aria-pressed="${TU_T==="x"}">Cancella</button>`;
+ const nm=v=>fN.format(v);
+ const riep=`<dl class="kv">${kv(`Notti di guardia <small>× ${nm(H.hN)} h</small>`,`${p.n} · ${hmF(p.oreN)} h`)}${kv(`Guardie festive diurne <small>× ${nm(H.hF)} h</small>`,`${p.f} · ${hmF(p.oreF)} h`)}${kv("Attività aggiuntiva",hmF(p.a)+" h")}${kv("Ferie",p.fe.length?nGg(p.fe.length):"—")}${kv("Recupero ore",p.rc.length?nGg(p.rc.length):"—")}</dl>`;
+ const soldi=p.lav?`<dl class="kv">${$.gL!=null&&p.oreG>0?kv("Guardie <small>lordo "+fmt($.gL)+"</small>",`<span class="nt-ent">${fmt($.gN)}</span>`):""}${$.aL!=null&&p.a>0?kv("Aggiuntiva <small>lordo "+fmt($.aL)+"</small>",`<span class="nt-ent">${fmt($.aN)}</span>`):""}
+   ${$.netto!=null?kv(`Netto stimato <small>con il cedolino di ${MESE_L($.pag).toLowerCase()}</small>`,`<b class="nt-ent">${fmt($.netto)}</b>`,"strong"):""}</dl>
+   ${$.tG==null||$.tA==null?`<p class="note">Manca la tariffa ${$.tG==null&&$.tA==null?"di guardia e aggiuntiva":$.tG==null?"di guardia":"dell'aggiuntiva"} (si legge da un cedolino che la riporta).</p>`:""}`:`<p class="muted">Nessuna guardia o aggiuntiva nel piano di questo mese.</p>`;
+ /* confronto con il cartellino del mese */
+ let cmp="";if(cart){const cN=cart.notti.length,cF=cart.festive.length,cA=cart.agg/60,cFe=cart.ferieGiorni;
+  const row=(l,a,b,f)=>{const d=Math.abs(a-b)>0.26;return `<tr><td>${l}</td><td>${f(a)}</td><td>${f(b)}</td><td>${d?`<span class="chip">${b>a?"+":"−"}${f(Math.abs(b-a))}</span>`:'<span class="chip ok">uguale</span>'}</td></tr>`;};
+  const soloP=p.fe.filter(g=>!cFe.includes(g)),soloC=cFe.filter(g=>!p.fe.includes(g));
+  cmp=`<div class="box"><h3>Piano e cartellino di ${MESE_L(ym).toLowerCase()}${cart.provvisorio?' <small class="muted">cartellino provvisorio</small>':""}</h3>
+   <div class="tbl-wrap flat"><table class="tu-cmp"><thead><tr><th></th><th>Piano</th><th>Cartellino</th><th></th></tr></thead><tbody>
+   ${row("Notti di guardia",p.n,cN,v=>String(Math.round(v)))}${row("Guardie festive",p.f,cF,v=>String(Math.round(v)))}${row("Ore di aggiuntiva",p.a,cA,v=>hmF(v))}${row("Giorni di ferie",p.fe.length,cFe.length,v=>String(Math.round(v)))}</tbody></table></div>
+   ${soloP.length||soloC.length?`<p class="note">${soloP.length?`Ferie nel piano ma non nel cartellino: ${soloP.join(", ")}. `:""}${soloC.length?`Ferie nel cartellino ma non nel piano: ${soloC.join(", ")}.`:""}</p>`:""}
+   <p class="note">L'aggiuntiva pagata è quella certificata dalla U.O.C. Libera Professione, che può differire dalle ore timbrate. Le notti si confrontano per numero: nel cartellino le ore di una notte stanno sul giorno di uscita.</p></div>`;}
+ return `<section class="sheet">
+ <div class="sheet-h"><h2>Turni</h2><p>Il piano del mese: segna guardie, aggiuntiva, ferie e recuperi per avere subito ore e compensi stimati, senza aspettare il cartellino. Quando il cartellino arriva, il piano si confronta con quanto timbrato.</p></div>
+ <div class="box tu-box">
+  <div class="tu-nav"><button class="btn ghost sm" data-act="tu-m" data-d="-1" aria-label="Mese prima">‹</button><h3>${MESE_L(ym)}${p.giorni?` <small>${p.giorni} ${p.giorni===1?"giorno segnato":"giorni segnati"}</small>`:""}</h3><button class="btn ghost sm" data-act="tu-m" data-d="1" aria-label="Mese dopo">›</button></div>
+  <div class="tu-tools" role="toolbar" aria-label="Cosa segnare">${tool}<label class="tu-h" ${TU_T==="a"?"":"hidden"}>ore <input class="in" id="tu-h" inputmode="decimal" value="${nm(TU_H)}" aria-label="Ore di aggiuntiva per giorno"></label></div>
+  <p class="note tu-hint">Scegli cosa segnare, poi tocca i giorni (un secondo tocco lo toglie). La notte va sul giorno in cui inizia.</p>
+  <div class="tu-g">${TU_DOW.map((d,i)=>`<span class="tu-dw${i>4?" tu-fest":""}">${d}</span>`).join("")}${cells}</div>
+  ${READONLY?"":`<div class="actions"><button class="lnk" data-act="tu-clear" ${p.giorni?"":"disabled"}>svuota il mese</button></div>`}
+ </div>
+ <div class="grid tu-sum"><div class="box"><h3>Ore del piano</h3>${riep}<p class="note">Ore medie per notte, festiva e giornata di aggiuntiva ${H.daCart?"dai cartellini letti":"predefinite (12 h, 12 h, 4 h): diventano le tue medie quando ci sono cartellini"}.</p></div>
+  <div class="box"><h3>Compenso stimato</h3>${soldi}<p class="note">Lordo = ore × tariffa dell'ultimo cedolino. Netto: guardie meno contributi e IRPEF allo scaglione stimato, aggiuntiva meno l'imposta sostitutiva del 15%. Pagato di norma con il cedolino di due mesi dopo; finché il cartellino non c'è, la stima di Finanze usa questo piano.</p></div></div>
+ ${cmp}
+</section>`;};
+function tuSet(d){if(READONLY)return;const t=Object.assign({},(S.turni||{})[d]||{}),k=TU_T;
+ if(k==="x"){delete S.turni[d];}
+ else{if(k==="a"){const h=TU_H>0&&TU_H<=24?TU_H:turniOre().hA;if(t.a===h)delete t.a;else t.a=h;}else if(t[k])delete t[k];else t[k]=1;
+  if(t[k]&&(k==="fe"||k==="rc")){["n","f","a",k==="fe"?"rc":"fe"].forEach(x=>delete t[x]);}
+  else if(t[k]&&["n","f","a"].includes(k)){delete t.fe;delete t.rc;}
+  if(Object.keys(t).length)S.turni[d]=t;else delete S.turni[d];}
+ scheduleSave();render();}
+view.addEventListener("click",e=>{const b=e.target.closest("[data-act^='tu-']");if(!b)return;const a=b.dataset.act;e.preventDefault();
+ if(!S.turni)S.turni={};
+ if(a==="tu-day")tuSet(b.dataset.d);
+ else if(a==="tu-tool"){TU_T=b.dataset.t;render();}
+ else if(a==="tu-m"){TU_M=ymAdd(TU_M||TODAY.slice(0,7),+b.dataset.d);render();}
+ else if(a==="tu-clear"){const ks=Object.keys(S.turni).filter(k=>k.startsWith(TU_M));if(!ks.length||!confirm(`Togliere i ${ks.length} giorni segnati in ${MESE_L(TU_M).toLowerCase()}?`))return;ks.forEach(k=>delete S.turni[k]);scheduleSave();render();}});
+view.addEventListener("change",e=>{if(e.target.id!=="tu-h")return;const v=parseFloat(String(e.target.value).replace(",","."));if(v>0&&v<=24){TU_H=q25(v);e.target.value=fN.format(TU_H);}else e.target.value=fN.format(TU_H);});
+/* ================= v59: orario e riposi (dalle timbrature dei cartellini) =================
+   Riferimenti: D.Lgs. 66/2003 art. 4 (durata media ≤ 48 h ogni 7 giorni, straordinari compresi, media su un periodo
+   non superiore a 4 mesi), art. 6 (ferie e malattia non contano nella media), art. 7 (11 h di riposo consecutivo ogni
+   24 h); dirigenti medici inclusi dal 25/11/2015 (L. 161/2014, art. 14). Deroghe di CCNL/accordi aziendali NON
+   considerate (scelta di Marco, 11/11/2026: in sospeso). Solo promemoria personale, non un giudizio di conformità.
+   Turni: intervalli timbrati uniti se contigui (24:00 → 00:00 del giorno dopo) o separati da una pausa < 2 h; il
+   riposo è lo stacco tra la fine di un turno e l'inizio del successivo. Ore settimanali = somma delle timbrature
+   (pause escluse) da lunedì a domenica; contano solo le settimane con tutti i 7 giorni coperti da cartellini. */
+const ORA_PAUSA=120,ORA_RIP=11*60,ORA_SETT=48*60,ORA_MED=17;
+const hm2m=s=>{const m=/^(\d{1,2}):(\d{2})$/.exec(String(s||""));return m?+m[1]*60+ +m[2]:null;};
+const dayISO=(Y,M,g)=>`${Y}-${p2(M)}-${p2(g)}`;
+let ORA={r:null,v:null};
+function oraDati(){if(ORA.r===S.cart&&ORA.v)return ORA.v;
+ const L=(S.cart?S.cart.lista:[]).slice().sort((a,b)=>a.periodo.localeCompare(b.periodo));
+ const iv=[],inc=[],cop=new Set(),fer=new Set();
+ L.forEach(c=>{const Y=+c.periodo.slice(0,4),M=+c.periodo.slice(5),dim=new Date(Y,M,0).getDate();
+  for(let g=1;g<=dim;g++)cop.add(dayISO(Y,M,g));(c.ferieGiorni||[]).forEach(g=>fer.add(dayISO(Y,M,g)));
+  c.giorni.forEach(d=>d.t.forEach(([e,u,k])=>{const a=hm2m(e),b=hm2m(u);if(a==null||b==null){inc.push(dayISO(Y,M,d.g));return;}
+   const s=new Date(Y,M-1,d.g,0,a).getTime(),en=new Date(Y,M-1,d.g,0,b).getTime();if(en>s)iv.push({s,e:en,a:k==="a"});}));});
+ iv.sort((x,y)=>x.s-y.s);
+ /* i giorni prima della prima timbratura (es. prima dell'assunzione) non sono «coperti»: le settimane a 0 h non abbassano la media */
+ if(iv.length){const f0=isoD(new Date(iv[0].s));[...cop].forEach(d=>{if(d<f0)cop.delete(d);});}
+ const tu=[];iv.forEach(x=>{const l=tu[tu.length-1];if(l&&x.s-l.e<ORA_PAUSA*60000){l.e=Math.max(l.e,x.e);l.min+=(x.e-x.s)/60000;l.a=l.a||x.a;}else tu.push({s:x.s,e:x.e,min:(x.e-x.s)/60000,a:x.a});});
+ const rip=[];for(let i=1;i<tu.length;i++){const gap=(tu[i].s-tu[i-1].e)/60000;if(gap<ORA_RIP)rip.push({fine:tu[i-1].e,inizio:tu[i].s,min:Math.round(gap)});}
+ /* settimane lun–dom */
+ const sett=[];if(L.length){const d0=new Date(+L[0].periodo.slice(0,4),+L[0].periodo.slice(5)-1,1),lp=L[L.length-1].periodo,dEnd=new Date(+lp.slice(0,4),+lp.slice(5),0);
+  let w=new Date(d0);w.setDate(w.getDate()-((w.getDay()+6)%7));
+  while(w<=dEnd){const ws=w.getTime(),we=new Date(w.getFullYear(),w.getMonth(),w.getDate()+7).getTime(),gg=[];
+   for(let i=0;i<7;i++){const x=new Date(w.getFullYear(),w.getMonth(),w.getDate()+i);gg.push(isoD(x));}
+   const full=gg.every(x=>cop.has(x)),fe=gg.filter(x=>fer.has(x)).length;
+   const min=Math.round(sum(iv.map(x=>Math.max(0,Math.min(x.e,we)-Math.max(x.s,ws))/60000)));
+   sett.push({da:gg[0],a:gg[6],min,full,fe});w=new Date(we);}}
+ const valide=sett.filter(x=>x.full&&!x.fe),ult=valide.slice(-ORA_MED),media=ult.length?sum(ult.map(x=>x.min))/ult.length:null;
+ ORA={r:S.cart,v:{tu,rip,sett,inc:[...new Set(inc)],media,nMed:ult.length,medDa:ult.length?ult[0].da:"",medA:ult.length?ult[ult.length-1].a:"",sopra:sett.filter(x=>x.full&&x.min>ORA_SETT)}};return ORA.v;}
+const dtIt=ms=>{const d=new Date(ms);return `${p2(d.getDate())}/${p2(d.getMonth()+1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;};
+const ddIt=iso=>iso?iso.slice(8,10)+"/"+iso.slice(5,7):"";
+function oraChart(sett){const W=Math.max(320,sett.length*18+50),H=170,L=34,T=10,B=24,ph=H-T-B,mx=Math.max(60*60,...sett.map(x=>x.min))/60;
+ const top=Math.ceil(mx/12)*12,y=v=>T+ph-(v/top)*ph,bw=Math.max(6,Math.min(14,(W-L-8)/sett.length-4)),slot=(W-L-8)/sett.length;
+ let g="";[0,24,48,top].filter((v,i,a)=>a.indexOf(v)===i&&v<=top).forEach(v=>{g+=`<line x1="${L}" x2="${W-4}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" ${v===48?'stroke-dasharray="5 4" stroke-width="1.5" class="o48"':""}/><text x="${L-5}" y="${y(v)+4}" text-anchor="end">${v}</text>`;});
+ let bs="",lab="",lastM="";sett.forEach((x,i)=>{const cx=L+slot*i+slot/2,h=x.min/60,cls=!x.full?"o-p":x.fe?"o-f":x.min>ORA_SETT?"o-x":"o-n";
+  bs+=`<rect class="${cls}" x="${(cx-bw/2).toFixed(1)}" y="${y(h).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(ph-(y(h)-T),0.5).toFixed(1)}" rx="2"><title>${ddIt(x.da)}–${ddIt(x.a)}: ${hm(x.min)} h${!x.full?" (settimana non completa nei cartellini)":x.fe?` (${x.fe} ${x.fe===1?"giorno":"giorni"} di ferie: esclusa dalla media)`:""}</title></rect>`;
+  const m=x.da.slice(5,7);if(m!==lastM){lastM=m;lab+=`<text x="${(cx-bw/2).toFixed(1)}" y="${H-7}">${MESI[+m-1].slice(0,3).toLowerCase()}</text>`;}});
+ return `<div class="tbl-wrap flat o-wrap"><svg class="o-ch" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Ore lavorate per settimana">${g}${bs}${lab}</svg></div>`;}
+V["lv-ora"]=()=>{const L=S.cart?S.cart.lista:[];
+ const head=`<div class="sheet-h"><h2>Orario e riposi</h2><p>Dalle timbrature dei cartellini: riposi tra un turno e l'altro e ore lavorate per settimana, confrontati con i limiti di legge sull'orario di lavoro.</p></div>`;
+ if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cartellino ancora: <a href="#presenze">Presenze e ferie</a>.</div></section>`;
+ const O=oraDati(),rs=O.rip.slice().reverse(),lastW=O.sett.filter(x=>x.full).slice(-1)[0];
+ const rows=rs.map(r=>`<tr><td>${dtIt(r.fine)}</td><td>${dtIt(r.inizio)}</td><td class="neg"><b>${hm(r.min)}</b></td></tr>`).join("");
+ return `<section class="sheet">${head}
+ <div class="hero">
+  <div class="tile ${O.rip.length?"t-tax":"t-liq"}"><span class="l">Riposi sotto 11 ore</span><span class="v">${O.rip.length}</span><span class="s">${O.rip.length?"l'ultimo il "+dtIt(O.rip[O.rip.length-1].inizio).slice(0,5):"nessuno"} · ${MESE_L(L[0].periodo).toLowerCase()} – ${MESE_L(L[L.length-1].periodo).toLowerCase()}</span></div>
+  <div class="tile ${O.media!=null&&O.media>ORA_SETT?"t-tax":""}"><span class="l">Media settimanale</span><span class="v">${O.media!=null?hm(Math.round(O.media)):"—"} h</span><span class="s">${O.nMed?`${O.nMed} settimane complete senza ferie, ${ddIt(O.medDa)} – ${ddIt(O.medA)} (limite 48 h)`:"servono settimane complete nei cartellini"}</span></div>
+  <div class="tile"><span class="l">Settimane oltre 48 h</span><span class="v">${O.sopra.length}</span><span class="s">${lastW?`ultima settimana completa: ${hm(lastW.min)} h`:"—"}</span></div>
+ </div>
+ <div class="box"><h3>Riposi tra turni sotto 11 ore</h3>
+  ${rows?`<div class="tbl-wrap flat"><table class="o-rip"><thead><tr><th>Fine turno</th><th>Inizio turno dopo</th><th>Riposo</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<p class="muted">Nessuno nei cartellini letti.</p>`}
+  <details class="more"><summary>Come si calcola</summary><p class="note">Le timbrature si uniscono in turni: una notte (fino alle 24:00 e dalle 00:00 del giorno dopo) è un turno solo, e una pausa sotto le 2 ore nella stessa giornata non conta come riposo. Il riposo è il tempo tra la fine di un turno e l'inizio del successivo; sono elencati quelli sotto le 11 ore consecutive (D.Lgs. 66/2003, art. 7).${O.inc.length?` Timbrature incomplete, escluse dal calcolo: ${O.inc.map(ddIt).join(", ")}.`:""}</p></details></div>
+ <div class="box"><h3>Ore per settimana <small>lunedì–domenica</small></h3>
+  ${oraChart(O.sett)}
+  <ul class="pleg o-leg"><li><i class="o-n"></i><span>Settimana</span></li><li><i class="o-x"></i><span>Oltre 48 h</span></li><li><i class="o-f"></i><span>Con ferie (esclusa dalla media)</span></li><li><i class="o-p"></i><span>Non completa nei cartellini</span></li></ul>
+  ${O.sopra.length?`<p class="note">Oltre 48 h: ${O.sopra.map(x=>`${ddIt(x.da)}–${ddIt(x.a)} (${hm(x.min)} h)`).join(" · ")}. Una singola settimana può superarle: il limite riguarda la media.</p>`:""}
+  <details class="more"><summary>Riferimenti e limiti del calcolo</summary><p class="note">D.Lgs. 66/2003: art. 4, durata media dell'orario non oltre 48 ore ogni 7 giorni, straordinari compresi, calcolata su un periodo di riferimento non superiore a 4 mesi; art. 6, ferie e malattia non entrano nella media; art. 7, 11 ore di riposo consecutivo ogni 24 ore. Per i dirigenti medici del SSN valgono dal 25/11/2015 (L. 161/2014, art. 14). Qui la media è sulle ultime ${ORA_MED} settimane complete (circa 4 mesi) senza giorni di ferie. Non sono considerate le deroghe previste da contratti collettivi o accordi aziendali, né le assenze per malattia (il cartellino non le distingue qui): è un promemoria personale, non una verifica di conformità.</p></details></div>
+</section>`;};
+/* ================= v59: ore di aggiuntiva certificate (report U.O.C. Libera Professione) ================= */
+/* S.aggCert {"YYYY-MM": ore}: se c'è, sostituisce le ore timbrate nella stima del pagamento dell'aggiuntiva */
+const aggOre=c=>{const v=(S.aggCert||{})[c.periodo];return v!=null?v:c.agg/60;};
+function aggCertBox(L){const M=L.filter(c=>c.agg>0||(S.aggCert||{})[c.periodo]!=null).slice().reverse();if(!M.length)return "";
+ return `<div class="box" id="ac-box"><h3>Ore di aggiuntiva certificate</h3>
+  <div class="ac-l">${M.map(c=>{const v=(S.aggCert||{})[c.periodo];
+   return `<label class="ac-r"><span>${MESE_L(c.periodo)}<br><small class="muted">timbrate ${hm(c.agg)}</small></span><input class="in ac-in" data-ym="${c.periodo}" inputmode="decimal" value="${v!=null?fN.format(v):""}" placeholder="ore" aria-label="Ore certificate di ${MESE_L(c.periodo).toLowerCase()}" ${READONLY?"disabled":""}></label>`;}).join("")}</div>
+  <p class="note">Le ore pagate sono quelle del report della U.O.C. Libera Professione, che può arrotondare rispetto alle timbrature. Se le scrivi qui, la stima del pagamento usa queste al posto delle timbrate (in ore decimali: 8,5 = 8 ore e 30). Vuoto = ore timbrate.</p></div>`;}
+view.addEventListener("change",e=>{const t=e.target;if(!t.classList||!t.classList.contains("ac-in")||READONLY)return;
+ const ym=t.dataset.ym,raw=String(t.value).trim().replace(",",".");if(!S.aggCert)S.aggCert={};
+ const prev=S.aggCert[ym];if(raw===""){if(prev==null)return;delete S.aggCert[ym];}else{const v=parseFloat(raw);if(!(v>=0&&v<=300)){t.classList.add("bad");return;}const nv=Math.round(v*100)/100;if(prev===nv)return;S.aggCert[ym]=nv;}
+ scheduleSave();setTimeout(render,0);});
+/* ================= v59: anno mese per mese (guardie e aggiuntiva) ================= */
+function annoBox(Y){const P=cartPagamenti(),L=(S.cart?S.cart.lista:[]).filter(c=>c.periodo.startsWith(Y)),last=L.length?L[L.length-1].periodo:"";
+ const pm=[...new Set(Object.keys(S.turni||{}).map(k=>k.slice(0,7)))].filter(m=>m.startsWith(Y)&&m>last).sort().map(pianoMese).filter(q=>q.lav);
+ const mesi=[...L.map(c=>({ym:c.periodo,n:c.tz.notte.mese/60,f:c.tz.fest.mese/60,a:aggOre(c),pj:false})),...pm.map(q=>({ym:q.ym,n:q.oreN,f:q.oreF,a:q.a,pj:true}))];
+ if(!mesi.length)return "";
+ const soldi=m=>{if(m.pj){const $=pianoSoldi(pianoMese(m.ym));return{l:$.lordo,n:$.netto,st:"piano"};}
+  const rr=P.righe.filter(r=>r.periodo===m.ym);const l=sum(rr.map(r=>r.pag?r.pag.importo:(r.stima||0)));
+  const n=sum(rr.map(r=>{const v=r.pag?r.pag.importo:r.stima;return v?lavNetto(r.tipo,v,r.pag?r.pag.ced[0]:r.atteso)||0:0;}));
+  const st=!rr.length?"":rr.every(r=>r.pag)?"pagato":rr.some(r=>r.pag)?"in parte":"in arrivo";return{l,n,st};};
+ const R2=mesi.map(m=>Object.assign(m,{$:soldi(m)})),top=Math.max(12,...R2.map(m=>m.n+m.f+m.a));
+ const W=Math.max(300,R2.length*46+40),H=150,T=8,B=22,ph=H-T-B,yy=v=>T+ph-v/top*ph,slot=(W-36)/R2.length,bw=Math.min(26,slot-10);
+ let bars="";R2.forEach((m,i)=>{const cx=36+slot*i+slot/2;let acc=0;[["n","var(--inv)"],["f","var(--tax)"],["a","var(--ent-t)"]].forEach(([k,c])=>{const v=m[k];if(!(v>0))return;
+  bars+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${yy(acc+v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(ph*v/top).toFixed(1)}" style="fill:${c}" ${m.pj?'class="a-pj"':""}><title>${MESE_L(m.ym)}${m.pj?" (piano)":""}: ${k==="n"?"notti":k==="f"?"festive":"aggiuntiva"} ${hmF(v)} h</title></rect>`;acc+=v;});
+  bars+=`<text x="${cx}" y="${H-6}" text-anchor="middle">${MESI[+m.ym.slice(5)-1].slice(0,3).toLowerCase()}</text>`;});
+ const g=[0,Math.round(top/2),top].map(v=>`<line x1="36" x2="${W-2}" y1="${yy(v)}" y2="${yy(v)}" style="stroke:var(--line)" stroke-dasharray="3 4"/><text x="31" y="${yy(v)+4}" text-anchor="end">${v}</text>`).join("");
+ const tL=sum(R2.map(m=>m.$.l)),tN=sum(R2.map(m=>m.$.n||0)),tH=sum(R2.map(m=>m.n+m.f+m.a));
+ const rows=R2.map(m=>`<tr${m.pj?' class="a-pjr"':""}><td>${MESE_L(m.ym)}<br><small class="muted">${m.pj?"dal piano":m.$.st||""}</small></td><td>${hmF(m.n+m.f+m.a)}</td><td>${m.$.l?fmt(m.$.l):"—"}</td><td>${m.$.n?fmt(m.$.n):"—"}</td></tr>`).join("");
+ const nG=P.tG!=null?lavNetto("guardia",P.tG,TODAY.slice(0,7)):null,nA=P.tA!=null?P.tA*0.85:null;
+ return `<div class="box" id="anno-box"><h3>Mese per mese · ${Y} <small>${hmF(tH)} ore · ≈ ${fmt(tN)} netti</small></h3>
+  <div class="tbl-wrap flat o-wrap"><svg class="o-ch" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Ore di guardia e aggiuntiva mese per mese ${Y}"><defs><pattern id="a-pjp" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="var(--surface)" opacity=".55"/></pattern></defs>${g}${bars}</svg></div>
+  <ul class="pleg o-leg"><li><i style="background:var(--inv)"></i><span>Guardie notturne</span></li><li><i style="background:var(--tax)"></i><span>Guardie festive</span></li><li><i style="background:var(--ent-t)"></i><span>Aggiuntiva</span></li><li><i class="a-pjl"></i><span>Dal piano turni</span></li></ul>
+  <div class="tbl-wrap flat"><table class="a-t"><thead><tr><th>Mese lavorato</th><th>Ore</th><th>Lordo</th><th>Netto ≈</th></tr></thead><tbody>${rows}</tbody>
+   <tfoot><tr class="tot"><td>Totale</td><td>${hmF(tH)}</td><td>${fmt(tL)}</td><td>${fmt(tN)}</td></tr></tfoot></table></div>
+  <dl class="kv">${nG!=null?kv("Un'ora di guardia <small>netto stimato</small>",fmt(nG)+"/h"):""}${nA!=null?kv("Un'ora di aggiuntiva <small>netto</small>",fmt(nA)+"/h"):""}</dl>
+  <p class="note">Ore per mese lavorato (si pagano di norma due mesi dopo). Lordo = pagato nel cedolino se c'è, altrimenti stima (ore × tariffa). Netto stimato anche per i mesi pagati: il cedolino non separa le trattenute per voce.</p></div>`;}
+/* ================= v59: calendario del mese dal cartellino (Presenze) ================= */
+function cartCal(x){const Y=+x.periodo.slice(0,4),M=+x.periodo.slice(5),dim=new Date(Y,M,0).getDate(),off=(new Date(Y,M-1,1).getDay()+6)%7,byG={};x.giorni.forEach(g=>byG[g.g]=g);
+ let c="";for(let i=0;i<off;i++)c+=`<span class="tu-c tu-v" aria-hidden="true"></span>`;
+ for(let g=1;g<=dim;g++){const d=byG[g]||{},tags=[],pl=(S.turni||{})[dayISO(Y,M,g)]||{};
+  if(x.notti.includes(g))tags.push(`<i class="tu-t tu-n">N</i>`);if(x.festive.includes(g))tags.push(`<i class="tu-t tu-f">F</i>`);
+  const am=x.aggGiorni.includes(g)?sum((d.c||[]).filter(z=>z[0]==="000038").map(z=>z[1]||0)):0;if(am)tags.push(`<i class="tu-t tu-a">A ${hm(am)}</i>`);
+  if(x.ferieGiorni.includes(g))tags.push(`<i class="tu-t tu-fe">Fe</i>`);if(x.recGiorni.includes(g))tags.push(`<i class="tu-t tu-rc">R</i>`);
+  const diff=(!!pl.n!==x.notti.includes(g))||(!!pl.f!==x.festive.includes(g))||(!!pl.fe!==x.ferieGiorni.includes(g));
+  const hasPl=Object.keys(S.turni||{}).some(k=>k.startsWith(x.periodo));
+  c+=`<span class="tu-c${festivo(new Date(Y,M-1,g))?" tu-fest":""}${hasPl&&diff?" tu-diff":""}" title="${hasPl&&diff?"diverso dal piano turni":""}"><b>${g}</b>${tags.join("")}${d.tc?`<small class="tu-o">${hm(d.tc)}</small>`:""}</span>`;}
+ return `<div class="tu-g tu-ro">${TU_DOW.map((d,i)=>`<span class="tu-dw${i>4?" tu-fest":""}">${d}</span>`).join("")}${c}</div>`;}
 function cartInfo(){const cs=cartState(),c=S.cart,L=c?c.lista:[];
  return [["Cartellini letti",c?L.filter(x=>x.ok).length+" verificati"+(L.some(x=>!x.ok)?", "+L.filter(x=>!x.ok).length+" da controllare":"")+(c.errori.length?", "+c.errori.length+" illeggibili":""):"—"],
   ["Mesi",L.length?MESE_L(L[0].periodo)+" – "+MESE_L(L[L.length-1].periodo):"nessuno"],
@@ -1861,7 +2068,7 @@ const hmF=v=>hm(Math.round(v*60)); /* ore decimali -> h:mm (per le ciambelle) */
 V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  const head=`<div class="sheet-h"><h2>Dashboard lavoro${L.length?" "+L[L.length-1].periodo.slice(0,4):""}</h2><p>${L.length?`Ultimo cartellino: ${MESE_L(L[L.length-1].periodo).toLowerCase()}${L[L.length-1].provvisorio?" (provvisorio)":""}.`:"Cartellini presenze e cedolini letti sul PC di casa."}</p></div>`;
  if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cartellino ancora. ${hubUrl()?"Salva i PDF nella cartella Cartellini e premi «Aggiorna ora».":"Imposta prima l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div>
-  <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#cedolini">Cedolini</a></div><p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p></section>`;
+  <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#turni">Turni</a><a class="btn ghost" href="#cedolini">Cedolini</a></div><p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p></section>`;
  const x=L[L.length-1],anno=x.periodo.slice(0,4),Lanno=L.filter(y=>y.periodo.startsWith(anno)),mn=MESI[+x.periodo.slice(5)-1].toLowerCase();
  const gN=x.tz.notte.mese/60,gF=x.tz.fest.mese/60,ag=x.agg/60,ord=Math.max(0,(x.fatto||0)/60-gN-gF);
  const main=[["Orario ordinario",ord,"c-liq"],["Guardie notturne",gN,"c-inv"],["Guardie festive",gF,"c-tasse"],["Attività aggiuntiva",ag,"c-ent"]].filter(r=>r[1]>0),totM=sum(main.map(r=>r[1]));
@@ -1872,6 +2079,10 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  const totArr=sum(arr.map(r=>r.stima||0)),totPag=sum(pag.map(r=>r.pag.importo));
  const ced=(S.ced?S.ced.lista:[]).filter(c=>c.controllo.ok),cl=ced[ced.length-1],cd=cl?cedDerive(cl):null;
  const nf=v=>fN.format(v);
+ const tym=TODAY.slice(0,7),tp=pianoMese(tym),t$=pianoSoldi(tp),tmn=MESI[+tym.slice(5)-1].toLowerCase(),fProg=ferieProgr();
+ const tpSeg=[["Guardie notturne",tp.oreN,"c-inv"],["Guardie festive",tp.oreF,"c-tasse"],["Attività aggiuntiva",tp.a,"c-ent"]],tpTot=tp.oreG+tp.a;
+ const OD=oraDati(),oMed=OD.media!=null?OD.media/60:null;
+ const arrN=sum(arr.map(r=>r.stima!=null?lavNetto(r.tipo,r.stima,r.atteso)||0:0));
  return `<section class="sheet">${head}
  <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button></div><p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>
  ${vrf.length?`<div class="banner">${vrf.length===1?"Un pagamento":vrf.length+" pagamenti"} di guardie o aggiuntiva da verificare: <a href="#lv-pag">Guardie e aggiuntiva</a>.</div>`:""}
@@ -1881,17 +2092,23 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
    <div class="pside"><ul class="pleg">${main.map(([l,v,c])=>li(c,l,v,totM,hmF)).join("")}</ul>
    <dl class="kv">${kv("Dovute",hm(x.dovuto))}${kv("Saldo del mese",`<span class="${saldo>0?"pos":saldo<0?"neg":""}">${hmS(saldo)}</span>`)}</dl></div></a>
   <div class="pcard-sub">
+   <a class="psub" href="#turni" data-act="go" data-tab="turni" title="Apri Turni"><h4>Turni di ${tmn} <small>${tp.giorni?(t$.netto!=null&&tp.lav?"≈ "+fmt(t$.netto)+" netti":tp.giorni+" giorni segnati"):"nessun turno segnato"}</small></h4>
+    <div class="psub-in">${donut(tpSeg,112,15,"Turni di "+tmn,1,tpTot,"ore",hmF)}<div><ul class="pleg">${tpSeg.map(([l,v,c])=>li(c,l+(l==="Guardie notturne"?` (${tp.n})`:l==="Guardie festive"?` (${tp.f})`:""),v,tpTot,hmF)).join("")}</ul>
+    <dl class="kv">${t$.netto!=null&&tp.lav?kv(`Netto stimato <small>a ${MESI[+t$.pag.slice(5)-1].toLowerCase()}</small>`,fmt(t$.netto)):""}${tp.fe.length?kv("Ferie",nGg(tp.fe.length)):""}${tp.giorni?"":kv("Piano","tocca per segnare i turni")}</dl></div></div></a>
+   <a class="psub" href="#lv-ora" data-act="go" data-tab="lv-ora" title="Apri Orario e riposi"><h4>Orario e riposi <small>${OD.rip.length?OD.rip.length+(OD.rip.length===1?" riposo":" riposi")+" sotto 11 h":"riposi regolari"}</small></h4>
+    <div class="psub-in">${donut(oMed!=null?[["Media settimanale",Math.min(oMed,48),oMed>48?"c-tasse":"c-liq"],["Fino a 48 h",Math.max(48-oMed,0),"#8888"]]:[],112,15,"Media settimanale",1,oMed||0,"h/sett.",hmF)}<div>
+    <dl class="kv">${kv("Media settimanale",oMed!=null?hmF(oMed)+" h":"—")}${kv("Settimane oltre 48 h",String(OD.sopra.length))}${kv("Riposi sotto 11 h",String(OD.rip.length))}</dl></div></div></a>
    <a class="psub" href="#presenze" data-act="go" data-tab="presenze" title="Apri Presenze e ferie"><h4>Recupero ore <small>a fine ${mn}</small></h4>
     <div class="psub-in">${donut([["Residuo",Math.max(0,(x.recupero||0)/60),"c-risp"]],112,15,"Recupero ore",1,(x.recupero||0)/60,"residuo",hmF)}<div>
     <dl class="kv">${(()=>{const i=L.indexOf(x),pr=i>0&&L[i-1].periodo===ymAdd(x.periodo,-1)?L[i-1]:null;return (pr?kv("Residuo a fine "+MESI[+pr.periodo.slice(5)-1].toLowerCase(),hm(pr.recupero)):"")+kv("Saldo del mese",hmS(saldo))+(u?kv("Ore recuperate",`−${hm(u)}`):"")+kv("Residuo",`<b>${hm(x.recupero)}</b>`);})()}</dl></div></div></a>
    <a class="psub" href="#presenze" data-act="go" data-tab="presenze" title="Apri Presenze e ferie"><h4>Ferie ${anno} <small>${nGg(ferRes)} residue</small></h4>
     <div class="psub-in">${donut([["Godute",ferGod,"c-spese"],["Residue",ferRes,"c-liq"]],112,15,"Ferie "+anno,1,ferRes,"residue",v=>nf(v)+" gg")}<div><ul class="pleg">${li("c-spese","Godute",ferGod,ferGod+ferRes,v=>nf(v)+" gg")}${li("c-liq","Residue",ferRes,ferGod+ferRes,v=>nf(v)+" gg")}</ul>
-    <dl class="kv">${kv("Congedo ordinario",nf(fer.co.residuo)+" su "+nf(fer.co.spettanti))}${kv("Festività soppresse",nf(fer.fs.residuo))}</dl></div></div></a>
+    <dl class="kv">${kv("Congedo ordinario",nf(fer.co.residuo)+" su "+nf(fer.co.spettanti))}${kv("Festività soppresse",nf(fer.fs.residuo))}${fProg.length?kv("Programmate nel piano",nGg(fProg.length))+kv("Residue dopo il piano",nGg(ferRes-fProg.length)):""}</dl></div></div></a>
    <a class="psub" href="#lv-pag" data-act="go" data-tab="lv-pag" title="Apri Guardie e aggiuntiva"><h4>Guardie e aggiuntiva ${anno} <small>${hmF(nA+fA+aA)} ore</small></h4>
     <div class="psub-in">${donut([["Guardie notturne",nA,"c-inv"],["Guardie festive",fA,"c-tasse"],["Attività aggiuntiva",aA,"c-ent"]],112,15,"Guardie e aggiuntiva "+anno,1,nA+fA+aA,"ore",hmF)}<div><ul class="pleg">${li("c-inv","Notti ("+Lanno.reduce((a,y)=>a+y.notti.length,0)+")",nA,nA+fA+aA,hmF)}${li("c-tasse","Festive ("+Lanno.reduce((a,y)=>a+y.festive.length,0)+")",fA,nA+fA+aA,hmF)}${li("c-ent","Aggiuntiva",aA,nA+fA+aA,hmF)}</ul></div></div></a>
    <a class="psub" href="#lv-pag" data-act="go" data-tab="lv-pag" title="Apri Guardie e aggiuntiva"><h4>Pagamenti guardie e aggiuntiva <small>${arr.length?fmt(totArr)+" in arrivo":"nulla in sospeso"}</small></h4>
     <div class="psub-in">${donut([["Pagati nel "+anno,totPag,"c-risp"],["In arrivo (stima)",totArr,"qa"]],112,15,"Pagamenti",1,totPag+totArr,"lordo")}<div><ul class="pleg">${li("c-risp","Già pagati",totPag,totPag+totArr)}${li("qa","In arrivo",totArr,totPag+totArr)}</ul>
-    <dl class="kv">${arr.map(r=>kv((r.tipo==="guardia"?"Guardia ":"Aggiuntiva ")+MESI[+r.periodo.slice(5)-1].toLowerCase(),`${fmt(r.stima)} <small class="muted">a ${MESI[+r.atteso.slice(5)-1].toLowerCase()}</small>`)).join("")||kv("In arrivo","—")}</dl></div></div></a>
+    <dl class="kv">${arr.map(r=>kv((r.tipo==="guardia"?"Guardia ":"Aggiuntiva ")+MESI[+r.periodo.slice(5)-1].toLowerCase(),`${fmt(r.stima)} <small class="muted">a ${MESI[+r.atteso.slice(5)-1].toLowerCase()}</small>`)).join("")||kv("In arrivo","—")}${arr.length?kv("Netto stimato in arrivo",`<b>${fmt(arrN)}</b>`):""}</dl></div></div></a>
    ${cd?`<a class="psub" href="#cedolini" data-act="go" data-tab="cedolini" title="Apri i cedolini"><h4>Cedolino di ${MESE_L(cl.periodo).toLowerCase()} <small>netto ${fmt(cd.netto)}</small></h4>
     <div class="psub-in">${donut([["Netto",cd.netto,"c-liq"],["Contributi",cd.contributi,"c-fisse"],["Imposte",cd.tasse,"c-tasse"]],112,15,"Cedolino",1,cd.lordo,"lordo")}<div><ul class="pleg">${li("c-liq","Netto",cd.netto,cd.lordo)}${li("c-fisse","Contributi",cd.contributi,cd.lordo)}${li("c-tasse","Imposte",cd.tasse,cd.lordo)}</ul>
     <dl class="kv">${kv("Pagato il",dIt(cl.dataPagamento)||"—")}</dl></div></div></a>`:""}
