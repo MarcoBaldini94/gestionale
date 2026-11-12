@@ -1340,15 +1340,16 @@ function setHubState(o){lsSet(HUB_STATE_KEY,JSON.stringify(Object.assign(hubStat
 let HUB_SEEN_T=0;
 function hubSeen(ok,err){const now=Date.now();
  if(ok){const st=hubState();if(now-HUB_SEEN_T<30000&&!(st.netErrAt>(st.lastSeen||0)))return;HUB_SEEN_T=now;setHubState({lastSeen:now});setTimeout(refreshLinks,0);}
- else{setHubState({netErr:err,netErrAt:now});setTimeout(refreshLinks,0);}}
+ else{setHubState({netErr:err,netErrAt:now,netErrPath:arguments[2]||""});setTimeout(refreshLinks,0);}}
 async function hubFetch(path,opt){
  const url=hubUrl();if(!url)throw new Error("indirizzo non impostato");
- const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),10000);
+ /* v63: gli archivi (estratti ~0,6 MB) su Tailscale via relay possono superare 10 s */
+ const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),/archivio|aggiorna|ultimo/.test(path)?45000:15000);
  try{const r=await fetch(url+path,Object.assign({signal:ctl.signal,cache:"no-store"},opt||{}));
   let j=null;try{j=await r.json()}catch(e){}
   hubSeen(true);
   if(!r.ok)throw new Error((j&&j.errore)||("errore HTTP "+r.status));return j;}
- catch(e){if(e.name==="AbortError"||e.message==="Failed to fetch")hubSeen(false,e.name==="AbortError"?"il PC non risponde":"PC non raggiungibile");
+ catch(e){if(e.name==="AbortError"||e instanceof TypeError)hubSeen(false,e.name==="AbortError"?"nessuna risposta entro il tempo massimo":"richiesta bloccata o rete assente ("+e.message+")",path.split("?")[0]);
   throw new Error(e.name==="AbortError"?"il PC non risponde":(e.message==="Failed to fetch"?"PC non raggiungibile (Tailscale attivo?)":e.message));}
  finally{clearTimeout(to)}}
 async function sha(t){try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return t.length+":"+t.slice(-64)}}
@@ -1454,7 +1455,7 @@ function linkMsg(k,t){linkMsgs[k]=t;const el=document.getElementById("lk-"+k+"-m
 function hubBadge(){const s=hubState(),url=hubUrl();
  if(!url)return ["off","non attivo"];
  /* due cose distinte: il PC risponde? (qualsiasi chiamata) e l'ultimo invio del backup è riuscito? */
- if(s.netErrAt&&s.netErrAt>(s.lastSeen||0))return ["warn","PC non raggiungibile (dalle "+fmtWhen(s.netErrAt)+")"];
+ if(s.netErrAt&&s.netErrAt>(s.lastSeen||0))return ["warn","PC non raggiungibile (dalle "+fmtWhen(s.netErrAt)+")"+(s.netErr?": "+s.netErr+(s.netErrPath?" · "+s.netErrPath:""):"")];
  if(s.lastErr&&s.lastErrAt>(s.lastOk||0)&&!(s.lastSeen>s.lastErrAt&&/raggiungibile|non risponde/.test(s.lastErr)))return ["warn","ultimo backup non riuscito: "+s.lastErr];
  return s.lastOk?["ok","ultimo backup "+fmtWhen(s.lastOk)]:["off","nessun backup ancora"];}
 function sondInfo(){const ss=sondState(),e=S.sondExt,hs=svHubState();
@@ -1497,8 +1498,9 @@ V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
   <form class="addrow" id="lk-hub-form" autocomplete="off">
    <label class="grow">Indirizzo dell'Hub<input class="in txt" id="lk-hub-url" placeholder="https://jarvis-pc.….ts.net:8443" value="${esc(hubUrl())}" inputmode="url" spellcheck="false"></label>
    <button class="btn" type="submit">Salva e prova</button></form>
-  <div class="actions"><button class="btn ghost" data-act="x-hub-now">Backup ora</button><button class="btn ghost" data-act="x-hub-restore">Ripristina dall'ultimo backup</button></div>
+  <div class="actions"><button class="btn ghost" data-act="x-hub-test">Prova la connessione</button><button class="btn ghost" data-act="x-hub-now">Backup ora</button><button class="btn ghost" data-act="x-hub-restore">Ripristina dall'ultimo backup</button></div>
   <p class="note" id="lk-hub-msg" ${linkMsgs.hub?"":"hidden"}>${linkMsgs.hub}</p>
+  <pre class="hub-test" id="lk-hub-test" ${HUB_TEST?"":"hidden"}>${esc(HUB_TEST)}</pre>
   <p class="note">È lo stesso indirizzo usato dall'app sondaggi e dalla scheda allenamento: se l'hai già inserito lì, qui compare da solo. I backup finiscono in OneDrive, nella cartella «backup» del progetto, un file per versione.</p></div>
  <div class="box"><h3>Backup su file</h3>
   <div class="actions"><button class="btn" data-act="x-exp">Scarica backup</button><label class="btn ghost" for="lk-imp">Importa backup…</label><input type="file" id="lk-imp" accept="application/json,.json" hidden></div>
@@ -1507,7 +1509,20 @@ V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
  </div></section>`;};
 function fromAnyBackup(o){if(o&&o.dati&&typeof o.dati==="object")o=o.dati;if(o&&o.data&&o.data.registro)o=o.data;
  if(!o||typeof o!=="object"||!(o.anni||o.registro||o.parametri))throw new Error("il file non sembra un backup del Gestionale");return o;}
+/* v63: prova di connessione con l'Hub, chiamata per chiamata (stessi percorsi usati dall'app) */
+let HUB_TEST="";
+async function hubTest(){const url=hubUrl(),el=()=>document.getElementById("lk-hub-test"),show=()=>{const x=el();if(x){x.textContent=HUB_TEST;x.hidden=!HUB_TEST;}};
+ if(!url){HUB_TEST="Indirizzo dell'Hub non impostato.";show();return;}
+ HUB_TEST=`Indirizzo: ${url}\nPagina: ${location.origin} · ${navigator.onLine?"online":"OFFLINE"}\n`;show();
+ for(const p of ["/api/ping","/api/"+HUB_APP+"/backup/elenco","/api/cedolini/archivio","/api/cartellini/archivio","/api/estratti/archivio","/api/guadagni/backup/ultimo"]){
+  const t0=performance.now();HUB_TEST+=`${p} … `;show();
+  try{const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),45000);const r=await fetch(url+p,{signal:ctl.signal,cache:"no-store"});const t=await r.text();clearTimeout(to);
+   HUB_TEST+=`${r.status} · ${Math.round(t.length/1024)} KB · ${Math.round(performance.now()-t0)} ms\n`;if(r.ok)hubSeen(true);}
+  catch(e){HUB_TEST+=`ERRORE ${e.name}: ${e.message} · ${Math.round(performance.now()-t0)} ms\n`;}
+  show();}
+ HUB_TEST+="Fine.";show();refreshLinks();}
 view.addEventListener("click",async e=>{const b=e.target.closest("[data-act^='x-']");if(!b)return;e.preventDefault();const a=b.dataset.act;
+ if(a==="x-hub-test"){hubTest();return;}
  if(a==="x-sond"){sondSync(true);return;}
  if(a==="x-sond-bk"){if(!hubUrl()){linkMsg("sond","Inserisci prima l'indirizzo dell'Hub.");return;}svLoad();svHubSync(true);return;}
  if(a==="x-sond-exp"){svLoad();svExport();return;}

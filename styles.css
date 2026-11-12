@@ -1062,3 +1062,4 @@ table.a-t th:first-child,table.o-rip th:first-child,table.tu-cmp th:first-child{
 .hb-t i.hb-x{margin-left:4px;background-image:repeating-linear-gradient(135deg,transparent 0 4px,color-mix(in srgb,var(--surface) 35%,transparent) 4px 6px)!important}
 .lv-lgx{margin-top:-4px}
 .lv-lgx li span{white-space:normal}
+pre.hub-test{white-space:pre-wrap;word-break:break-all;font:12px/1.5 var(--f-mono);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;user-select:text}
