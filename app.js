@@ -1311,7 +1311,8 @@ view.addEventListener("click",e=>{
  if(a==="edit"){EDIT=b.dataset.id;render();const f=document.querySelector("tr.edit input.txt");if(f)f.focus();return;}
  if(a==="done"){EDIT=null;render();return;}
  if(a==="tog"){if(READONLY)return;const r=S.scadenzario.find(x=>x.id===b.dataset.id);
-  if(r&&r.lk){if(!confirm(`«${r.voce}» è collegata a un movimento dei conti. Togliere il collegamento? La voce tornerà a «pagata alla scadenza».`))return;S.link=(S.link||[]).filter(l=>!(l.k==="s"&&l.r===r.id));applyLinks();render();scheduleSave();return;}
+  if(r&&r.lk){if(!confirm(`«${r.voce}» è collegata a un movimento dei conti. Togliere il collegamento? La voce tornerà a «pagata alla scadenza».`))return;{const tolti=(S.link||[]).filter(l=>l.k==="s"&&l.r===r.id);S.link=(S.link||[]).filter(l=>!(l.k==="s"&&l.r===r.id));
+  tolti.forEach(l=>{if(!S.link.some(x=>x.m===l.m))S.link.push({m:l.m,k:"x",r:"",d:l.d,i:l.i,c:l.c,t:l.t});});}applyLinks();render();scheduleSave();return;}
   if(r){const p=paidOf(r);if(p){r.pagato=false;r.forzaNonPagato=!!r.scadenza&&SD(r)<=TODAY;}else{r.pagato=true;r.forzaNonPagato=false;}r.dataPag=paidOf(r)?SD(r):"";render();scheduleSave();}return;}
  if(READONLY)return;
  if(a==="add-scad"){const t=TODAY.slice(4,10),nr={...scadRow("",+SY||UY,""),scadenza:/^\d{4}$/.test(SY)?SY+t:""};S.scadenzario.push(nr);EDIT=nr.id;}
@@ -1406,15 +1407,22 @@ let hubBusy=false,hubTimer=null;
    Evita che un dispositivo rimasto indietro sovrascriva il PC con dati vecchi (successo il 05/11/2026). */
 const canon=o=>JSON.stringify(o,(k,v)=>v&&typeof v==="object"&&!Array.isArray(v)?Object.keys(v).sort().reduce((a,x)=>(a[x]=v[x],a),{}):v);
 let hubPullBusy=false,OLD_APP=0;
-async function hubPull(){
- if(hubPullBusy||!hubUrl())return;hubPullBusy=true;
+/* v68: hubPull restituisce true solo se ha potuto controllare il PC. Il 10/11 e l'11/11/2026 una copia vecchia
+   dell'app (Samsung Internet, v54) ha mandato al PC dati dell'08/11 sovrascrivendo i collegamenti fatti dopo: il
+   controllo non era riuscito (errore di rete / tempo scaduto sul backup da 150 KB, ignorato in silenzio) e l'invio
+   era partito lo stesso. Ora senza controllo riuscito non si manda niente. */
+let HUB_PULL_P=null;
+function hubPull(){if(!hubUrl())return Promise.resolve(false);if(HUB_PULL_P)return HUB_PULL_P;
+ HUB_PULL_P=hubPull0().finally(()=>{HUB_PULL_P=null;});return HUB_PULL_P;}
+async function hubPull0(){
+ if(hubPullBusy||!hubUrl())return false;hubPullBusy=true;
  try{const el=await hubFetch("/api/"+HUB_APP+"/backup/elenco"),latest=(el&&el.file||[])[0],st=hubState();
-  if(!latest||latest===st.base)return;
+  if(!latest||latest===st.base)return true;
   const r=await hubFetch("/api/"+HUB_APP+"/backup/ultimo");if(!r||!r.dati)return;
-  if(+r.dati.appVer>APP_VER){if(!OLD_APP){OLD_APP=+r.dati.appVer;status("err","App da aggiornare: ricarica la pagina");render();}return;}
-  let H;try{H=load(fromAnyBackup(r));}catch(e){return;}
+  if(+r.dati.appVer>APP_VER){if(!OLD_APP){OLD_APP=+r.dati.appVer;status("err","App da aggiornare: ricarica la pagina");render();}return false;}
+  let H;try{H=load(fromAnyBackup(r));}catch(e){return false;}
   const hHub=await sha(canon(H)),hLoc=await sha(canon(S));
-  if(hHub===hLoc){setHubState({base:r.file,syncHash:hLoc});return;}
+  if(hHub===hLoc){setHubState({base:r.file,syncHash:hLoc});return true;}
   const pulito=!hasRealData(S)||(st.syncHash&&st.syncHash===hLoc);
   const quando=(m=>m?`${m[3]}/${m[2]} alle ${m[4]}:${m[5]}`:"?")(/(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})/.exec(r.file||""));
   const qui=lsGet(LS_AGG),voci=x=>`${x.registro.length} movimenti, ${x.scadenzario.length} scadenze, ${x.ricorrenti.length} spese ricorrenti`;
@@ -1422,12 +1430,14 @@ async function hubPull(){
    S=H;lsSet(LS_KEY,JSON.stringify(S));lsSet(LS_AGG,new Date().toISOString());
    setHubState({base:r.file,syncHash:await sha(canon(S)),lastHash:""});status("ok","Aggiornato con i dati salvati da un altro dispositivo");
    afterExternalChange();}
-  else setHubState({base:r.file});}
- catch(e){/* PC non raggiungibile: si riprova alla prossima occasione */}
+  else setHubState({base:r.file});
+  return true;}
+ catch(e){/* PC non raggiungibile: si riprova alla prossima occasione (e intanto NON si manda nulla) */return false;}
  finally{hubPullBusy=false;}}
 async function hubSync(force){
  if(hubBusy||!hubUrl()||!hasRealData(S)||OLD_APP)return;
- await hubPull();if(OLD_APP)return;
+ const okPull=await hubPull();if(OLD_APP)return;
+ if(!okPull){setHubState({lastErr:"controllo del PC non riuscito: backup rimandato",lastErrAt:Date.now()});linkMsg("hub","Non ho potuto controllare la versione sul PC: backup rimandato (riprovo alla prossima modifica o riapertura).");refreshLinks();return;}
  const body=JSON.stringify(S),h=await sha(body);
  if(!force&&hubState().lastHash===h)return;
  hubBusy=true;linkMsg("hub","Invio del backup al PC…");
@@ -2402,7 +2412,26 @@ function autoLinkMan(){const d=movLoad();if(!d||READONLY)return false;let ch=fal
   const r=S.scadenzario.find(x=>x.id===c.rs[0]),e=SD(r);if(!e||(e.slice(0,7)!==m.data.slice(0,7)&&Math.abs(dDiff(e,m.data))>10))return;
   linkSet(m,"s",[r.id]);todo.delete(r.id);ch=true;});
  return ch;}
-function applyLinks(){if(!Array.isArray(S.link))S.link=[];if(!S.linkMem)S.linkMem={};try{autoLinkMan();}catch(_){}
+/* v68 (richiesta di Marco: abbonamenti come Netflix, Claude, Spotify collegati da soli, anche nei mesi passati).
+   Spese fisse MENSILI la cui controparte è già stata collegata una volta (S.linkMem → id della spesa fissa): ogni pagamento
+   della stessa controparte si collega da solo alla riga dello stesso mese, se l'importo è quello previsto (±25%, o il
+   doppio per l'affitto pagato per due) e la riga è libera. Retroattivo: se ci sono pagamenti prima del mese di inizio
+   («dal») della spesa fissa, l'inizio si sposta indietro fino al primo pagamento (massimo gennaio di due anni prima),
+   così le righe passate esistono e si collegano. I movimenti segnati «non collegare» restano esclusi. */
+function autoLinkRic(){const d=movLoad();if(!d||READONLY)return false;
+ const TPL=Object.fromEntries((S.ricorrenti||[]).filter(t=>t.freq==="m").map(t=>[t.id,t]));if(!Object.keys(TPL).length)return false;
+ const AB=movAbb(),PR=movPrest(),okImp=(m,v)=>{const a=Math.abs(m.importo);return v>0&&(Math.abs(a-v)<=Math.max(0.011,0.25*v)||Math.abs(a-2*v)<=0.011);};
+ const mm=d.movimenti.filter(m=>m.importo<0&&!m.carta&&!AB[m.id]&&!PR[m.id]&&!linkOf(m.id).length&&!linkNo(m.id)).map(m=>({m,mem:(S.linkMem||{})[m.chiave]})).filter(x=>x.mem&&x.mem.k==="s"&&TPL[x.mem.r]).sort((a,b)=>a.m.data.localeCompare(b.m.data));
+ if(!mm.length)return false;let ch=false;
+ /* retroattivo: mese di inizio indietro fino al primo pagamento che combacia */
+ mm.forEach(({m,mem})=>{const t=TPL[mem.r],ym=m.data.slice(0,7);if(t.da&&ym<t.da&&okImp(m,n(t.importo))&&!t.esclusi.includes(ym)){t.da=ym;ch=true;}});
+ if(ch)ensureRic(S);
+ const occ=new Set((S.link||[]).filter(l=>l.k==="s").map(l=>l.r));
+ mm.forEach(({m,mem})=>{const t=TPL[mem.r],ym=m.data.slice(0,7),r=S.scadenzario.find(x=>x.ric===t.id&&x.rm===ym);if(!r||occ.has(r.id))return;
+  const v=n(r.importo!=null?r.importo:t.importo);if(!okImp(m,v))return;
+  S.link.push({m:m.id,k:"s",r:r.id,d:m.data,i:m.importo,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)});occ.add(r.id);ch=true;});
+ return ch;}
+function applyLinks(){if(!Array.isArray(S.link))S.link=[];if(!S.linkMem)S.linkMem={};try{autoLinkRic();}catch(e){console.warn("autoLinkRic",e);}try{autoLinkMan();}catch(_){}
  const prima=JSON.stringify([S.scadenzario,S.registro,S.ricorrenti,S.patrimonio,S.fondoMov,S.patEstrI]);
  const L=S.link.filter(l=>l.k!=="x");
  /* 1. scadenzario */
@@ -2486,7 +2515,10 @@ function linkProp(m){if(!linkable(m)||linkOf(m.id).length||linkNo(m.id))return n
  const c=linkCands(m,false);if(!c.length)return null;const b=c[0];
  if(pc)return b.sc>=1.2?b:null;
  return b.k==="s"&&b.rs.length===1&&b.sc>=2.5&&(S.scadenzario.find(r=>r.id===b.rs[0])||{}).ric?b:null;}
-function linkSet(m,k,rs){S.link=(S.link||[]).filter(l=>l.m!==m.id);
+function linkSet(m,k,rs){const era=(S.link||[]).some(l=>l.m===m.id&&l.k==="s");S.link=(S.link||[]).filter(l=>l.m!==m.id);
+ /* v68: togliendo un collegamento a una spesa fissa il movimento diventa «non collegare», altrimenti il collegamento
+    automatico (autoLinkRic) lo rimetterebbe subito */
+ if(!k&&era)k="x";
  if(k==="x")S.link.push({m:m.id,k:"x",r:"",d:m.data,i:m.importo,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)});
  else if(k)rs.forEach(r=>S.link.push({m:m.id,k,r,d:m.data,i:k==="s"&&rs.length>1?0:m.importo,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)}));
  if(k==="s"&&rs.length===1){const r=S.scadenzario.find(x=>x.id===rs[0]);if(r)S.linkMem[m.chiave]={k:"s",r:r.ric||tipoOf(r)};}
