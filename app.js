@@ -2420,16 +2420,22 @@ function autoLinkMan(){const d=movLoad();if(!d||READONLY)return false;let ch=fal
    così le righe passate esistono e si collegano. I movimenti segnati «non collegare» restano esclusi. */
 function autoLinkRic(){const d=movLoad();if(!d||READONLY)return false;
  const TPL=Object.fromEntries((S.ricorrenti||[]).filter(t=>t.freq==="m").map(t=>[t.id,t]));if(!Object.keys(TPL).length)return false;
- const AB=movAbb(),PR=movPrest(),okImp=(m,v)=>{const a=Math.abs(m.importo);return v>0&&(Math.abs(a-v)<=Math.max(0.011,0.25*v)||Math.abs(a-2*v)<=0.011);};
+ /* v69: il «doppio» su una sola riga vale solo per l'affitto (pagato per due); per le altre spese (es. Internet rimborsato
+    con un bonifico a chi paga per te) un importo ≈ doppio copre due mesi: la rata del mese e quella del mese prima */
+ const isAffT=t=>/affitt/i.test(t.voce||"");
+ const AB=movAbb(),PR=movPrest(),okImp=(m,v,t)=>{const a=Math.abs(m.importo);return v>0&&(Math.abs(a-v)<=Math.max(0.011,0.25*v)||(isAffT(t)&&Math.abs(a-2*v)<=0.011));};
+ const ok2=(m,v,t)=>{const a=Math.abs(m.importo);return v>0&&!isAffT(t)&&Math.abs(a-2*v)<=0.15*2*v;};
  const mm=d.movimenti.filter(m=>m.importo<0&&!m.carta&&!AB[m.id]&&!PR[m.id]&&!linkOf(m.id).length&&!linkNo(m.id)).map(m=>({m,mem:(S.linkMem||{})[m.chiave]})).filter(x=>x.mem&&x.mem.k==="s"&&TPL[x.mem.r]).sort((a,b)=>a.m.data.localeCompare(b.m.data));
  if(!mm.length)return false;let ch=false;
  /* retroattivo: mese di inizio indietro fino al primo pagamento che combacia */
- mm.forEach(({m,mem})=>{const t=TPL[mem.r],ym=m.data.slice(0,7);if(t.da&&ym<t.da&&okImp(m,n(t.importo))&&!t.esclusi.includes(ym)){t.da=ym;ch=true;}});
+ mm.forEach(({m,mem})=>{const t=TPL[mem.r],ym=m.data.slice(0,7),v=n(t.importo),st=ok2(m,v,t)?ymAdd(ym,-1):okImp(m,v,t)?ym:null;
+  if(st&&t.da&&st<t.da&&!t.esclusi.includes(st)){t.da=st;ch=true;}});
  if(ch)ensureRic(S);
- const occ=new Set((S.link||[]).filter(l=>l.k==="s").map(l=>l.r));
- mm.forEach(({m,mem})=>{const t=TPL[mem.r],ym=m.data.slice(0,7),r=S.scadenzario.find(x=>x.ric===t.id&&x.rm===ym);if(!r||occ.has(r.id))return;
-  const v=n(r.importo!=null?r.importo:t.importo);if(!okImp(m,v))return;
-  S.link.push({m:m.id,k:"s",r:r.id,d:m.data,i:m.importo,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)});occ.add(r.id);ch=true;});
+ const occ=new Set((S.link||[]).filter(l=>l.k==="s").map(l=>l.r)),rowOf=(t,ym)=>S.scadenzario.find(x=>x.ric===t.id&&x.rm===ym);
+ const put=(m,r,i)=>{S.link.push({m:m.id,k:"s",r:r.id,d:m.data,i,c:m.conto,t:(m.descr||m.tipo||"").slice(0,60)});occ.add(r.id);ch=true;};
+ mm.forEach(({m,mem})=>{const t=TPL[mem.r],ym=m.data.slice(0,7),r=rowOf(t,ym),v=n(r&&r.importo!=null?r.importo:t.importo);
+  if(r&&!occ.has(r.id)&&okImp(m,v,t)){put(m,r,m.importo);return;}
+  if(ok2(m,v,t)){const r0=rowOf(t,ymAdd(ym,-1));if(r&&r0&&!occ.has(r.id)&&!occ.has(r0.id)){const h=Math.round(m.importo*50)/100;put(m,r0,h);put(m,r,Math.round((m.importo-h)*100)/100);}}});
  return ch;}
 function applyLinks(){if(!Array.isArray(S.link))S.link=[];if(!S.linkMem)S.linkMem={};try{autoLinkRic();}catch(e){console.warn("autoLinkRic",e);}try{autoLinkMan();}catch(_){}
  const prima=JSON.stringify([S.scadenzario,S.registro,S.ricorrenti,S.patrimonio,S.fondoMov,S.patEstrI]);
@@ -2485,6 +2491,9 @@ function linkCands(m,tutti){const out=[],a=Math.abs(m.importo),mem=(S.linkMem||{
  const occ=new Set((S.link||[]).filter(l=>l.k==="s"&&l.m!==m.id).map(l=>l.r));
  if(m.importo<0){
   S.scadenzario.forEach((r,i)=>{const e=SD(r);if(!e||occ.has(r.id))return;const dd=dDiff(e,m.data);if(dd<-(tutti?150:80)||dd>(tutti?150:95))return;
+   /* v69 (richiesta di Marco): niente rate dei mesi successivi al pagamento. Le spese mensili: mese del pagamento o prima
+      (o il mese dopo se la scadenza è entro 10 giorni, es. affitto pagato a fine mese); le altre: scadenza entro 45 giorni */
+   if(r.rm?(r.rm>m.data.slice(0,7)&&dd>10):dd>45)return;
    const imp=rows0[i]?rows0[i].imp:n(r.importo);let sc=0;
    if(mem&&mem.k==="s"&&((r.ric&&mem.r===r.ric)||(!r.ric&&mem.r===tipoOf(r))))sc=r.rm?(e.slice(0,7)===m.data.slice(0,7)?3.5:1):3;
    const tp=r.ric?(S.ricorrenti||[]).find(t=>t.id===r.ric):null;
