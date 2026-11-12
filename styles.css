@@ -1063,3 +1063,10 @@ table.a-t th:first-child,table.o-rip th:first-child,table.tu-cmp th:first-child{
 .lv-lgx{margin-top:-4px}
 .lv-lgx li span{white-space:normal}
 pre.hub-test{white-space:pre-wrap;word-break:break-all;font:12px/1.5 var(--f-mono);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;user-select:text}
+
+/* ===== v65: sondaggi distinti nelle entrate (parte variabile/ipotetica) ===== */
+:root{--c-sond:color-mix(in srgb,var(--ent) 42%,var(--surface));--t-sond:var(--ent-t)}
+.mc-sond{background:var(--c-sond);background-image:repeating-linear-gradient(135deg,transparent 0 5px,color-mix(in srgb,var(--ent) 30%,transparent) 5px 7px)}
+.nt-sond{color:var(--ent-t);opacity:.85}
+.pj-c .pleg li.pj-s{border-top:1px dashed var(--line);font-weight:600;padding-top:4px;margin-bottom:4px}
+.pj-c .pleg li.pj-s span{grid-column:1/3}
