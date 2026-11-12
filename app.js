@@ -1788,7 +1788,7 @@ function lavPage(mode){const c=S.cart,L=c?c.lista:[];
  ${aggCertBox(L)}
 </section>`:`<section class="sheet">${head}${errs}
  <div class="hero">
-  <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}</span></div>
+  <div class="tile"><span class="l">Ore · ${MESE_L(x.periodo)}</span><span class="v">${hm(x.fatto)}</span><span class="s">dovute ${hm(x.dovuto)} · saldo ${hmS(saldo)}${x.agg?` · + ${hm(x.agg)} di aggiuntiva (extra)`:""}</span></div>
   <div class="tile"><span class="l">Recupero ore residuo</span><span class="v">${hm(x.recupero)}</span><span class="s">${(()=>{const i=L.indexOf(x),pr=i>0&&L[i-1].periodo===ymAdd(x.periodo,-1)?L[i-1]:null,u=cartUsate(L,x);return pr&&u!=null?`${hm(pr.recupero)} di ${MESE_L(pr.periodo).toLowerCase().split(" ")[0]} ${hmS(saldo)} saldo${u?" − "+hm(u)+" recuperate":""}`:"a fine "+MESE_L(x.periodo).toLowerCase();})()}</span></div>
   <div class="tile t-liq"><span class="l">Ferie residue</span><span class="v">${nGg(ferRes)}</span><span class="s">congedo ${fN.format(fer.co.residuo)} · festività soppresse ${fN.format(fer.fs.residuo)}${fer.ap.residuo?" · anni prec. "+fN.format(fer.ap.residuo):""} (a ${MESE_L(last.periodo).toLowerCase()})</span></div>
  </div>
@@ -1796,7 +1796,7 @@ function lavPage(mode){const c=S.cart,L=c?c.lista:[];
    ${kv("Congedo ordinario spettante",nGg(fer.co.spettanti))}${kv("Goduti",nGg(fer.co.fruiti))}${kv("Festività soppresse residue",nGg(fer.fs.residuo))}${fer.ap.residuo?kv("Residuo anni precedenti",nGg(fer.ap.residuo)):""}${kv("Residue totali",nGg(ferRes))}${fProg.length?kv(`Programmate nel piano <small>dopo ${MESE_L(last.periodo).toLowerCase()}</small>`,nGg(fProg.length))+kv("Residue dopo il piano",`<b>${nGg(ferRes-fProg.length)}</b>`,"strong"):""}</dl>
    <p class="note">${Lanno.filter(y=>y.ferieGiorni.length).map(y=>MESE_L(y.periodo)+": "+y.ferieGiorni.join(", ")).join(" · ")||"Nessun giorno di ferie nei cartellini letti."}</p></div>
  <div class="box"><h3>Mesi</h3><div class="tbl-wrap flat"><table><thead><tr><th>Mese</th><th>Fatte</th><th>Dovute</th><th>Saldo mese</th><th>Recuperate</th><th>Residuo</th><th>Notti</th><th>Festive</th><th>Aggiuntiva</th><th>Ferie</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-  <p class="note">Il residuo di recupero ore si muove così: residuo del mese prima + saldo del mese − ore recuperate con riposo (causale 9018, «recupero ore dirigenza»). Il saldo del mese, quindi, non coincide col residuo nei mesi in cui hai preso giorni di recupero. I giorni di riposo compensativo dopo una guardia festiva (9013) sono già nel saldo, come le ore mancanti il giorno prima di una notte. Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
+  <p class="note">«Fatte» sono le ore d'orario del cartellino: l'attività aggiuntiva è sempre extra, non entra nelle ore dovute né nel saldo (è nella sua colonna). Il residuo di recupero ore si muove così: residuo del mese prima + saldo del mese − ore recuperate con riposo (causale 9018, «recupero ore dirigenza»). Il saldo del mese, quindi, non coincide col residuo nei mesi in cui hai preso giorni di recupero. I giorni di riposo compensativo dopo una guardia festiva (9013) sono già nel saldo, come le ore mancanti il giorno prima di una notte. Tocca un mese per vederne i giorni. I cartellini «provvisori» vengono ricalcolati dall'Azienda: ristampali e sostituisci il PDF per avere i numeri aggiornati.</p></div>
  <div class="box" id="lv-giorni"><h3>Giorni di ${MESE_L(x.periodo).toLowerCase()}${x.calcolo?` <small class="muted">· calcolo del ${dIt(x.calcolo.slice(0,10))}</small>`:""}</h3>${cartCal(x)}
   <details class="more lv-dt"><summary>Timbrature giorno per giorno</summary><div class="tbl-wrap flat"><table class="lv-days"><thead><tr><th>Giorno</th><th>Timbrature</th><th>Causali</th><th>Ore</th><th>Ecc./car.</th></tr></thead><tbody>${days}</tbody></table></div></details>
   <p class="note">N notte (sul giorno in cui inizia), F guardia festiva, A aggiuntiva, Fe ferie, R recupero; in basso le ore del giorno. ${Object.keys(S.turni||{}).some(k=>k.startsWith(x.periodo))?"Bordo tratteggiato = diverso dal piano turni. ":""}<span class="lv-ta">In corsivo</span> le timbrature di attività aggiuntiva. Le notti iniziano alle 20 e finiscono il mattino dopo: le ore compaiono sul giorno di uscita.</p></div>
@@ -1922,7 +1922,7 @@ function oraChart(sett){const W=Math.max(320,sett.length*18+50),H=170,L=34,T=10,
   const m=x.da.slice(5,7);if(m!==lastM){lastM=m;lab+=`<text x="${(cx-bw/2).toFixed(1)}" y="${H-7}">${MESI[+m-1].slice(0,3).toLowerCase()}</text>`;}});
  return `<div class="tbl-wrap flat o-wrap"><svg class="o-ch" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Ore lavorate per settimana">${g}${bs}${lab}</svg></div>`;}
 V["lv-ora"]=()=>{const L=S.cart?S.cart.lista:[];
- const head=`<div class="sheet-h"><h2>Orario e riposi</h2><p>Dalle timbrature dei cartellini: riposi tra un turno e l'altro e ore lavorate per settimana, confrontati con i limiti di legge sull'orario di lavoro.</p></div>`;
+ const head=`<div class="sheet-h"><h2>Orario e riposi</h2><p>Dalle timbrature dei cartellini: riposi tra un turno e l'altro e ore lavorate per settimana (compresa l'aggiuntiva, che non entra nelle ore dovute ma è comunque lavoro), confrontati con i limiti di legge sull'orario di lavoro.</p></div>`;
  if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cartellino ancora: <a href="#presenze">Presenze e ferie</a>.</div></section>`;
  const O=oraDati(),rs=O.rip.slice().reverse(),lastW=O.sett.filter(x=>x.full).slice(-1)[0];
  const rows=rs.map(r=>`<tr><td>${dtIt(r.fine)}</td><td>${dtIt(r.inizio)}</td><td class="neg"><b>${hm(r.min)}</b></td></tr>`).join("");
@@ -2071,7 +2071,7 @@ function svReplace(d,origine){const n=sondClean(d);if(!confirm(`Sostituire i dat
 const hmF=v=>hm(Math.round(v*60)); /* ore decimali -> h:mm */
 /* barra orizzontale impilata: segs [[etichetta, valore, token colore]], max = fondo scala, mark {v,l} = tacca di riferimento */
 function hbar(segs,max,mark,fv,label){const s=segs.filter(x=>x[1]>0),F=fv||fmt;if(!(max>0))return "";
- return `<div class="hb" role="img" aria-label="${esc(label||"")}: ${s.map(([l,v])=>l+" "+F(v)).join(", ")}"><div class="hb-t">${s.map(([l,v,c])=>`<i style="width:${Math.min(v/max*100,100).toFixed(2)}%;background:var(--${c})" title="${esc(l)}: ${F(v)}"></i>`).join("")}</div>${mark&&mark.v>0?`<b class="hb-m" style="left:${Math.min(mark.v/max*100,100).toFixed(2)}%" title="${esc(mark.l)}"><span>${esc(mark.l)}</span></b>`:""}</div>`;}
+ return `<div class="hb" role="img" aria-label="${esc(label||"")}: ${s.map(([l,v])=>l+" "+F(v)).join(", ")}"><div class="hb-t">${s.map(([l,v,c,k])=>`<i${k?` class="${k}"`:""} style="width:${Math.min(v/max*100,100).toFixed(2)}%;background:var(--${c})" title="${esc(l)}: ${F(v)}"></i>`).join("")}</div>${mark&&mark.v>0?`<b class="hb-m" style="left:${Math.min(mark.v/max*100,100).toFixed(2)}%" title="${esc(mark.l)}"><span>${esc(mark.l)}</span></b>`:""}</div>`;}
 /* legenda con valori (testo nei colori del testo, il quadratino porta il colore) */
 const lgd=(segs,fv)=>`<ul class="lv-lg">${segs.filter(x=>x[1]>0).map(([l,v,c])=>`<li><i style="background:var(--${c})"></i><span>${l}</span><b>${(fv||fmt)(v)}</b></li>`).join("")}</ul>`;
 /* colonnine: items [{l, segs:[[v,token]], t (title), pj}], ref {v,l} = linea di riferimento */
@@ -2094,8 +2094,8 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  if(!L.length)return `<section class="sheet">${head}<div class="banner">Nessun cartellino ancora. ${hubUrl()?"Salva i PDF nella cartella Cartellini e premi «Aggiorna ora».":"Imposta prima l'indirizzo dell'Hub in <a href=\"#collegamenti\">Collegamenti e backup</a>."}</div>
   <div class="actions"><button class="btn" data-act="x-cart">Aggiorna ora</button><a class="btn ghost" href="#turni">Turni</a><a class="btn ghost" href="#cedolini">Cedolini</a></div><p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p></section>`;
  const x=L[L.length-1],anno=x.periodo.slice(0,4),Lanno=L.filter(y=>y.periodo.startsWith(anno)),mn=MESI[+x.periodo.slice(5)-1].toLowerCase(),m3=ym=>MESI[+ym.slice(5)-1].slice(0,3).toLowerCase();
- const gN=x.tz.notte.mese/60,gF=x.tz.fest.mese/60,ag=x.agg/60,fat=(x.fatto||0)/60,dov=(x.dovuto||0)/60,ord=Math.max(0,fat-gN-gF-ag);
- const main=[["Orario ordinario",ord,"c-liq"],["Guardie notturne",gN,"c-inv"],["Guardie festive",gF,"c-tasse"],["Attività aggiuntiva",ag,"c-ent"]];
+ const gN=x.tz.notte.mese/60,gF=x.tz.fest.mese/60,ag=x.agg/60,fat=(x.fatto||0)/60,dov=(x.dovuto||0)/60,ord=Math.max(0,fat-gN-gF); /* le ore fatte del cartellino non comprendono l'aggiuntiva: è sempre extra, fuori dalle dovute */
+ const main=[["Orario ordinario",ord,"c-liq"],["Guardie notturne",gN,"c-inv"],["Guardie festive",gF,"c-tasse"]],mainX=[...main,["Attività aggiuntiva (extra)",ag,"c-ent","hb-x"]];
  const saldo=x.fatto!=null&&x.dovuto!=null?x.fatto-x.dovuto:null,u=cartUsate(L,x);
  const fer=x.ferie,ferRes=fer.tot!=null?fer.tot:fer.co.residuo+fer.fs.residuo+fer.ap.residuo,ferGod=fer.co.fruiti+fer.fs.fruiti+fer.ap.fruiti;
  const P=cartPagamenti(),arr=P.righe.filter(r=>r.stato==="attesa"),pag=P.righe.filter(r=>r.pag&&r.periodo.startsWith(anno)),vrf=P.righe.filter(r=>["meno","piu","manca"].includes(r.stato));
@@ -2120,9 +2120,9 @@ V.lavoro=()=>{const c=S.cart,L=c?c.lista:[];
  <div class="box pcard"><h3>Ore di ${mn} <small>${x.provvisorio?"cartellino provvisorio":""}</small></h3>
  <div class="pcard-in">
   <a class="pcard-main pmain lv-main" href="#presenze" data-act="go" data-tab="presenze" title="Apri Presenze e ferie">
-   <div class="lv-hero"><span class="lv-big">${hm(x.fatto)}<small> h lavorate</small></span><span class="lv-sub">dovute ${hm(x.dovuto)} · saldo <b class="${saldo>0?"pos":saldo<0?"neg":""}">${hmS(saldo)}</b></span></div>
-   ${hbar(main,Math.max(fat,dov)*1.04,{v:dov,l:"dovute "+hm(x.dovuto)},hmF,"Ore di "+mn)}
-   ${lgd(main,hmF)}</a>
+   <div class="lv-hero"><span class="lv-big">${hm(x.fatto)}<small> h d'orario</small></span><span class="lv-sub">dovute ${hm(x.dovuto)} · saldo <b class="${saldo>0?"pos":saldo<0?"neg":""}">${hmS(saldo)}</b>${ag>0?` · <span class="nt-ent">+ ${hmF(ag)} h di aggiuntiva</span>`:""}</span></div>
+   ${hbar(mainX,(Math.max(fat,dov)+ag)*1.03,{v:dov,l:"dovute "+hm(x.dovuto)},hmF,"Ore di "+mn)}
+   ${lgd(main,hmF)}${ag>0?`<ul class="lv-lg lv-lgx"><li><i style="background:var(--c-ent)"></i><span>Attività aggiuntiva · extra, fuori dalle dovute</span><b>${hmF(ag)}</b></li></ul>`:""}</a>
   <div class="pcard-sub">
    <a class="psub" href="#turni" data-act="go" data-tab="turni" title="Apri Turni"><h4>Turni di ${tmn} <small>${tp.giorni?`${tp.n} notti · ${tp.f} festive${tp.a?" · "+hmF(tp.a)+" h agg.":""}`:"nessun turno segnato"}</small></h4>${psum(t$.netto!=null&&tp.lav?"≈ "+fmt(t$.netto):tp.giorni?tp.giorni+" gg":"—")}
     <div class="psub-in">${miniCal(tym)}<div>

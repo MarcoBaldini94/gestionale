@@ -1059,3 +1059,6 @@ table.a-t th:first-child,table.o-rip th:first-child,table.tu-cmp th:first-child{
 .lv-pl small{color:var(--muted);font-size:12px}
 .lv-pl .lv-pv{text-align:right}
 .lv-pl .lv-pv b{font:500 13px var(--f-mono)}
+.hb-t i.hb-x{margin-left:4px;background-image:repeating-linear-gradient(135deg,transparent 0 4px,color-mix(in srgb,var(--surface) 35%,transparent) 4px 6px)!important}
+.lv-lgx{margin-top:-4px}
+.lv-lgx li span{white-space:normal}
