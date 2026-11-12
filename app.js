@@ -673,7 +673,21 @@ function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
  /* spese variabili: ultimi 3 mesi con resoconto, senza straordinarie */
  const pool=[];Object.keys(R.svAll).sort().forEach(Y=>R.svAll[Y].risp.forEach((v,i)=>{if(v!=null)pool.push({Y,i,ym:`${Y}-${p2(i+1)}`});}));
  const l3=pool.slice(-3),strM=ym=>{try{return movMesi().includes(ym)?Math.max(-movNetto(ym).net.straord,0):0;}catch(_){return 0;}};
- const vari=l3.length?sum(l3.map(q=>Math.max(n(R.svAll[q.Y].spese[q.i])-strM(q.ym),0)))/l3.length:0;
+/* v66 (richiesta di Marco): spese di tutti i giorni = media dei mesi dell'ANNO dell'ultimo resoconto (non più gli ultimi 3);
+    con meno di 3 mesi nell'anno si usano gli ultimi 12 mesi con resoconto. Sempre senza le spese straordinarie. */
+ const yV=last.slice(0,4),poolY=pool.filter(q=>q.Y===yV),vM=poolY.length>=3?poolY:pool.slice(-12);
+ const vOf=q=>Math.max(n(R.svAll[q.Y].spese[q.i])-strM(q.ym),0);
+ const vari=vM.length?sum(vM.map(vOf))/vM.length:0;
+ /* suddivisione per categoria dagli estratti conto (stessi mesi, quando ci sono gli estratti): spesa, ristoranti e
+    svago, viaggi, carburante, altre spese quotidiane, buoni Amazon, casa e utenze SENZA l'affitto (che sta nelle
+    spese fisse). La riga «differenza» riconcilia con il totale calcolato dai saldi (entrate non registrate, contanti…). */
+ const variDet=(()=>{let mm=[];try{const MM=movMesi();mm=vM.filter(q=>MM.includes(q.ym));}catch(_){mm=[];}
+  if(!mm.length)return null;const K=[["spesa"],["svago"],["viaggi"],["carburante"],["vita"],["casa"],["amz"]];
+  const rows=K.map(([k])=>{const v=sum(mm.map(q=>{const N=movNetto(q.ym);if(k==="amz")return N.amz||0;const x=Math.max(-n(N.net[k]),0);return k==="casa"?Math.max(x-n(R.svAll[q.Y].aff&&R.svAll[q.Y].aff[q.i]),0):x;}))/mm.length;
+   return [k==="amz"?"Acquisti con buoni Amazon":k==="casa"?"Casa e utenze (senza affitto)":movLbl(k),v,MOV_COL[k]||"c-spese"];}).filter(r=>r[1]>0.5).sort((a,b)=>b[1]-a[1]);
+  const totM=sum(mm.map(vOf))/mm.length;return{rows,diff:totM-sum(rows.map(r=>r[1])),n:mm.length,tot:totM,stesso:mm.length===vM.length};})();
+ const ml=a=>a.length?(a.length===1?MESI[+a[0].ym.slice(5)-1].toLowerCase()+" "+a[0].Y:`${MESI[+a[0].ym.slice(5)-1].slice(0,3).toLowerCase()} ${a[0].Y!==a[a.length-1].Y?a[0].Y+" ":""}– ${MESI[+a[a.length-1].ym.slice(5)-1].slice(0,3).toLowerCase()} ${a[a.length-1].Y}`):"";
+ const variInfo={n:vM.length,lbl:ml(vM),anno:poolY.length>=3,mesi:vM.map(q=>[q.ym,vOf(q)])};
  const sondM=ym=>sum(S.registro.filter(r=>r.fonte==="sond"&&r.data.startsWith(ym)).map(r=>+r.importo||0));
  const sond3=l3.length?sum(l3.map(q=>sondM(q.ym)))/l3.length:0;
  const cur=TODAY.slice(0,7),mesi=[];let ym=ymAdd(last,1);
@@ -700,18 +714,28 @@ function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
   const pm=prestMese(ym);if(pm.rst>0.005)E.push(["Restituzioni prestiti",pm.rst,"segnate in Prestiti"]);
   let tas=0,fis=0,aff=0;S.scadenzario.forEach((r,i)=>{if(!PDt(r).startsWith(ym))return;const v=n(rows0[i]&&rows0[i].imp);if(!(v>0))return;
    const f=tipoOf(r)!=="spesa";if(f)tas+=v;else{fis+=v;if(/affitt/i.test(r.voce||""))aff+=v;}U.push([r.voce||"(senza nome)",v,f?"tasse":"fisse"]);});
-  U.push(["Spese variabili (media)",vari,"vari"]);
+  U.push(["Spese di tutti i giorni",vari,"vari"]);
   (S.prestiti||[]).filter(p=>p.data.startsWith(ym)).forEach(p=>U.push([`Prestito a ${p.chi}`,p.importo,"prest"]));
   const ent=sum(E.map(x=>x[1])),usc=tas+fis+vari+pm.prest,sond=sum(E.filter(x=>x[0]==="Sondaggi").map(x=>x[1]));
   return{ym,E,U,ent,sond,usc,tas,fis,aff,vari,prest:pm.prest,rst:pm.rst,sur:ent-usc,avv,hasCed};});
- PROJ.v={mesi:out,last,l3:l3.map(q=>q.ym),cR,netFix,F};return PROJ.v;}
+ PROJ.v={mesi:out,last,l3:l3.map(q=>q.ym),cR,netFix,F,variInfo,variDet};return PROJ.v;}
+/* v66: sottosezione a scomparsa con le spese di tutti i giorni per categoria (stato aperto in PJC_OPEN) */
+let PJC_OPEN=false;
+function variDetHTML(P){const D=P.variDet,I=P.variInfo;if(!I)return "";
+ const rows=D?D.rows.map(([l,v,c])=>`<li><i style="background:var(--${c})"></i><span>${esc(l)}</span><b>${fmt(v)}</b><em></em></li>`).join(""):"";
+ const mesi=I.mesi.map(([ym,v])=>`${MESI[+ym.slice(5)-1].slice(0,3).toLowerCase()} ${fN0.format(Math.round(v))}`).join(" · ");
+ return `<li class="pj-det"><details class="more pjc" ${PJC_OPEN?"open":""}><summary>Per categoria</summary>
+  ${D?`<ul class="pleg">${rows}${Math.abs(D.diff)>0.5?`<li><i style="background:var(--line)"></i><span>${D.diff>0?"Non attribuite <small>contanti, spese senza estratto, entrate non registrate</small>":"Differenza con i saldi <small>le categorie superano il calcolo dai saldi</small>"}</span><b>${fmt(D.diff,"sign")}</b><em></em></li>`:""}</ul>
+  <p class="note">Media al mese dagli estratti conto${D.stesso?"":` (${D.n} ${D.n===1?"mese":"mesi"} con estratto su ${I.n})`}, al netto dei rimborsi delle spese divise; esclusi affitto e spese fisse (già nelle voci sopra) e spese straordinarie.</p>`:`<p class="note">Servono gli estratti conto di questi mesi per dividere le spese per categoria.</p>`}
+  <p class="note">Mese per mese: ${mesi}.</p></details></li>`;}
+document.addEventListener("toggle",e=>{if(e.target.classList&&e.target.classList.contains("pjc"))PJC_OPEN=e.target.open;},true);
 function projBox(ym){const P=proj();if(!P||!P.mesi.length)return "";
  const L=P.mesi.filter(x=>x.ym===ym),ml=ym=>`${MESI[+ym.slice(5)-1]} ${ym.slice(0,4)}`;
  const card=x=>`<div class="pj-c"><h4>${ml(x.ym)} <small>stima</small></h4>
   <ul class="pleg">${(()=>{const row=([l,v,i],c)=>`<li><i style="background:var(--${c})"></i><span>${l}${i?` <small>${esc(i)}</small>`:""}</span><b class="nt-ent">${fmt(v)}</b><em></em></li>`,Es=x.E.filter(e=>e[0]!=="Sondaggi"),Eh=x.E.filter(e=>e[0]==="Sondaggi");
    return Es.map(e=>row(e,"c-ent")).join("")+`<li class="pj-s"><span>Entrate sicure <small>cedolino e altre già certe</small></span><b class="nt-ent">${fmt(x.ent-x.sond)}</b></li>`+Eh.map(e=>row(e,"c-sond")).join("");})()}
   <li class="pj-t"><span>Entrate${x.sond>0.5?` <small>di cui ipotetiche (sondaggi) ${fmt(x.sond)}</small>`:""}</span><b class="nt-ent">${fmt(x.ent)}</b></li>
-  ${x.U.map(([l,v,k])=>`<li><i style="background:var(--${k==="tasse"?"c-tasse":k==="fisse"?"c-aff":k==="prest"?"qa":"c-spese"})"></i><span>${esc(l)}</span><b class="nt-${k==="tasse"?"tasse":"spese"}">${fmt(v)}</b><em></em></li>`).join("")}
+  ${x.U.map(([l,v,k])=>`<li><i style="background:var(--${k==="tasse"?"c-tasse":k==="fisse"?"c-aff":k==="prest"?"qa":"c-spese"})"></i><span>${esc(l)}${k==="vari"&&P.variInfo?` <small>media ${P.variInfo.n} ${P.variInfo.n===1?"mese":"mesi"} (${P.variInfo.lbl})</small>`:""}</span><b class="nt-${k==="tasse"?"tasse":"spese"}">${fmt(v)}</b><em></em></li>${k==="vari"?variDetHTML(P):""}`).join("")}
   <li class="pj-t"><span>Uscite</span><b class="nt-spese">${fmt(x.usc)}</b></li></ul>
   <dl class="kv">${kv("Surplus previsto <small>entrate − uscite</small>",`<span class="${x.sur<0?"neg":"pos"}">${fmt(x.sur,"sign")}</span>`,"strong")}${x.sond>0.5?kv("Senza i sondaggi <small>solo entrate sicure</small>",`<span class="${x.sur-x.sond<0?"neg":"pos"}">${fmt(x.sur-x.sond,"sign")}</span>`):""}</dl>
   ${x.avv.map(a=>`<p class="note">${a}</p>`).join("")}</div>`;
@@ -719,7 +743,7 @@ function projBox(ym){const P=proj();if(!P||!P.mesi.length)return "";
  if(!L.length)return "";
  return `<div class="box" id="pj-box"><h3>Dettaglio della stima <small>${ml(ym).toLowerCase()} · surplus previsto ${fmt(tot,"sign")}</small></h3>
   <div class="pj-g">${L.map(card).join("")}</div>
-  <details class="more"><summary>Come è calcolata</summary><p class="note">Stima, non dati reali: i mesi stimati sono chiari e tratteggiati qui e nel grafico dell'Andamento. Diventano reali quando ci sono i saldi di fine mese in Patrimonio. <b>Stipendio</b>: netto dell'ultimo cedolino senza la parte di guardie e aggiuntiva (${P.netFix!=null?fmt(P.netFix):"—"}); se il cedolino del mese è già arrivato si usa quello. <b>Guardie e aggiuntiva</b>: ore dei cartellini pagate due mesi dopo, alla tariffa dell'ultimo cedolino (se il cartellino non c'è ancora, le ore del piano in Lavoro › Turni); guardie al netto dei contributi (${fmt(P.cR,"pct1")}) e dell'IRPEF allo scaglione stimato (23/33/43%, senza detrazioni); aggiuntiva al netto dell'imposta sostitutiva del 15%; senza cartellino né piano, media delle ore degli ultimi 3 mesi. <b>Tredicesima</b> (dicembre): voci fisse × mesi di servizio / 12. <b>Sondaggi</b>: media degli ultimi 3 mesi (o il prelevato del mese, se più alto): è la parte <b>ipotetica</b>, perché varia molto da un mese all'altro; per questo è separata dalle entrate sicure e c'è anche il surplus senza sondaggi. <b>Uscite</b>: tasse e spese fisse in scadenza nello Scadenzario + spese variabili = media delle spese di vita di ${P.l3.map(ym=>MESI[+ym.slice(5)-1].slice(0,3).toLowerCase()).join(", ")} senza le spese straordinarie. <b>Prestiti</b>: quelli datati nel mese sono uscite, le restituzioni segnate con una data futura sono entrate. Non entrano: addizionali IRPEF dell'anno prima, conguaglio di fine anno, investimenti.</p></details></div>`;}
+  <details class="more"><summary>Come è calcolata</summary><p class="note">Stima, non dati reali: i mesi stimati sono chiari e tratteggiati qui e nel grafico dell'Andamento. Diventano reali quando ci sono i saldi di fine mese in Patrimonio. <b>Stipendio</b>: netto dell'ultimo cedolino senza la parte di guardie e aggiuntiva (${P.netFix!=null?fmt(P.netFix):"—"}); se il cedolino del mese è già arrivato si usa quello. <b>Guardie e aggiuntiva</b>: ore dei cartellini pagate due mesi dopo, alla tariffa dell'ultimo cedolino (se il cartellino non c'è ancora, le ore del piano in Lavoro › Turni); guardie al netto dei contributi (${fmt(P.cR,"pct1")}) e dell'IRPEF allo scaglione stimato (23/33/43%, senza detrazioni); aggiuntiva al netto dell'imposta sostitutiva del 15%; senza cartellino né piano, media delle ore degli ultimi 3 mesi. <b>Tredicesima</b> (dicembre): voci fisse × mesi di servizio / 12. <b>Sondaggi</b>: media degli ultimi 3 mesi (o il prelevato del mese, se più alto): è la parte <b>ipotetica</b>, perché varia molto da un mese all'altro; per questo è separata dalle entrate sicure e c'è anche il surplus senza sondaggi. <b>Uscite</b>: tasse e spese fisse in scadenza nello Scadenzario + <b>spese di tutti i giorni</b> = media mensile ${P.variInfo&&P.variInfo.anno?"dei mesi dell'anno":"degli ultimi mesi"} con resoconto (${P.variInfo?P.variInfo.lbl:"—"}) di quello che resta delle uscite tolte tasse e spese fisse (calcolato dai saldi), senza le spese straordinarie; le categorie vengono dagli estratti conto. <b>Prestiti</b>: quelli datati nel mese sono uscite, le restituzioni segnate con una data futura sono entrate. Non entrano: addizionali IRPEF dell'anno prima, conguaglio di fine anno, investimenti.</p></details></div>`;}
 /* ================= v51: spese straordinarie con nota ================= */
 const movNota=id=>(S.movNote||{})[id]||"";
 function strBox(Y){const d=movLoad();if(!d)return "";const AB=movAbb(),PR=movPrest();
