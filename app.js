@@ -685,7 +685,14 @@ function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
     spese fisse). La riga «differenza» riconcilia con il totale calcolato dai saldi (entrate non registrate, contanti…). */
  const variDet=(()=>{let mm=[];try{const MM=movMesi();mm=vM.filter(q=>MM.includes(q.ym));}catch(_){mm=[];}
   if(!mm.length)return null;const K=[["spesa"],["svago"],["carburante"],["vita"],["casa"],["amz"]];
-  const rows=K.map(([k])=>{const v=sum(mm.map(q=>{const N=movNetto(q.ym);if(k==="amz")return N.amz||0;const x=Math.max(-n(N.net[k]),0);return k==="casa"?Math.max(x-n(R.svAll[q.Y].aff&&R.svAll[q.Y].aff[q.i]),0):x;}))/mm.length;
+  /* v70: i pagamenti collegati a una spesa fissa (abbonamenti in «Altre spese quotidiane», Internet in «Casa e utenze»…)
+     sono già nelle spese fisse: si tolgono dalla loro categoria, altrimenti la suddivisione li conterebbe due volte.
+     L'affitto si toglie con la quota delle spese fisse (sv.aff), come prima. */
+  const dmv=movLoad(),rowById=Object.fromEntries(S.scadenzario.map(r=>[r.id,r])),lkS=(S.link||[]).filter(l=>l.k==="s");
+  const dedM=ym=>{const o={};if(!dmv)return o;const byId={};dmv.movimenti.forEach(m=>{if(m.data.startsWith(ym))byId[m.id]=m;});
+   lkS.forEach(l=>{const m=byId[l.m];if(!m)return;const r=rowById[l.r];if(r&&/affitt/i.test(r.voce||""))return;const c=m.cat||"";o[c]=(o[c]||0)+Math.abs(n(l.i));});return o;};
+  const DED=Object.fromEntries(mm.map(q=>[q.ym,dedM(q.ym)]));
+  const rows=K.map(([k])=>{const v=sum(mm.map(q=>{const N=movNetto(q.ym);if(k==="amz")return N.amz||0;const x=Math.max(-n(N.net[k]),0),dd=n(DED[q.ym][k]);return k==="casa"?Math.max(x-n(R.svAll[q.Y].aff&&R.svAll[q.Y].aff[q.i])-dd,0):Math.max(x-dd,0);}))/mm.length;
    return [k==="amz"?"Acquisti con buoni Amazon":k==="casa"?"Casa e utenze (senza affitto)":movLbl(k),v,MOV_COL[k]||"c-spese"];}).filter(r=>r[1]>0.5).sort((a,b)=>b[1]-a[1]);
   const totM=sum(mm.map(vOf))/mm.length;return{rows,diff:totM-sum(rows.map(r=>r[1])),n:mm.length,tot:totM,stesso:mm.length===vM.length,viaggi:sum(mm.map(q=>viaM(q.ym)))/mm.length};})();
  const ml=a=>a.length?(a.length===1?MESI[+a[0].ym.slice(5)-1].toLowerCase()+" "+a[0].Y:`${MESI[+a[0].ym.slice(5)-1].slice(0,3).toLowerCase()} ${a[0].Y!==a[a.length-1].Y?a[0].Y+" ":""}– ${MESI[+a[a.length-1].ym.slice(5)-1].slice(0,3).toLowerCase()} ${a[a.length-1].Y}`):"";
@@ -722,7 +729,7 @@ function proj(){if(PROJ.r===R)return PROJ.v;PROJ.r=R;PROJ.v=null;
   return{ym,E,U,ent,sond,usc,tas,fis,aff,vari,prest:pm.prest,rst:pm.rst,sur:ent-usc,avv,hasCed};});
  PROJ.v={mesi:out,last,l3:l3.map(q=>q.ym),cR,netFix,F,variInfo,variDet};return PROJ.v;}
 /* v66: sottosezione a scomparsa con le spese di tutti i giorni per categoria (stato aperto in PJC_OPEN) */
-let PJC_OPEN=false;
+let PJC_OPEN=false,PJS_OPEN=false;
 function variDetHTML(P){const D=P.variDet,I=P.variInfo;if(!I)return "";
  const rows=D?D.rows.map(([l,v,c])=>`<li><i style="background:var(--${c})"></i><span>${esc(l)}</span><b>${fmt(v)}</b><em></em></li>`).join(""):"";
  const mesi=I.mesi.map(([ym,v])=>`${MESI[+ym.slice(5)-1].slice(0,3).toLowerCase()} ${fN0.format(Math.round(v))}`).join(" · ");
@@ -730,14 +737,18 @@ function variDetHTML(P){const D=P.variDet,I=P.variInfo;if(!I)return "";
   ${D?`<ul class="pleg">${rows}${Math.abs(D.diff)>0.5?`<li><i style="background:var(--line)"></i><span>${D.diff>0?"Non attribuite <small>contanti, spese senza estratto, entrate non registrate</small>":"Differenza con i saldi <small>le categorie superano il calcolo dai saldi</small>"}</span><b>${fmt(D.diff,"sign")}</b><em></em></li>`:""}</ul>
   <p class="note">Media al mese dagli estratti conto${D.stesso?"":` (${D.n} ${D.n===1?"mese":"mesi"} con estratto su ${I.n})`}, al netto dei rimborsi delle spese divise; esclusi affitto e spese fisse (già nelle voci sopra), spese straordinarie e <b>viaggi</b>${D.viaggi>0.5?` (in media ${fmt(D.viaggi)} al mese nello stesso periodo, non conteggiati)`:""}: una spesa occasionale grande falserebbe la stima di tutti i mesi.</p>`:`<p class="note">Servono gli estratti conto di questi mesi per dividere le spese per categoria.</p>`}
   <p class="note">Mese per mese: ${mesi}.</p></details></li>`;}
-document.addEventListener("toggle",e=>{if(e.target.classList&&e.target.classList.contains("pjc"))PJC_OPEN=e.target.open;},true);
+document.addEventListener("toggle",e=>{if(!e.target.classList)return;if(e.target.classList.contains("pjc"))PJC_OPEN=e.target.open;if(e.target.classList.contains("pjsc"))PJS_OPEN=e.target.open;},true);
 function projBox(ym){const P=proj();if(!P||!P.mesi.length)return "";
  const L=P.mesi.filter(x=>x.ym===ym),ml=ym=>`${MESI[+ym.slice(5)-1]} ${ym.slice(0,4)}`;
  const card=x=>`<div class="pj-c"><h4>${ml(x.ym)} <small>stima</small></h4>
   <ul class="pleg">${(()=>{const row=([l,v,i],c)=>`<li><i style="background:var(--${c})"></i><span>${l}${i?` <small>${esc(i)}</small>`:""}</span><b class="nt-ent">${fmt(v)}</b><em></em></li>`,Es=x.E.filter(e=>e[0]!=="Sondaggi"),Eh=x.E.filter(e=>e[0]==="Sondaggi");
    return Es.map(e=>row(e,"c-ent")).join("")+`<li class="pj-s"><span>Entrate sicure <small>cedolino e altre già certe</small></span><b class="nt-ent">${fmt(x.ent-x.sond)}</b></li>`+Eh.map(e=>row(e,"c-sond")).join("");})()}
   <li class="pj-t"><span>Entrate${x.sond>0.5?` <small>di cui ipotetiche (sondaggi) ${fmt(x.sond)}</small>`:""}</span><b class="nt-ent">${fmt(x.ent)}</b></li>
-  ${x.U.map(([l,v,k])=>`<li><i style="background:var(--${k==="tasse"?"c-tasse":k==="fisse"?"c-aff":k==="prest"?"qa":"c-spese"})"></i><span>${esc(l)}${k==="vari"&&P.variInfo?` <small>media ${P.variInfo.n} ${P.variInfo.n===1?"mese":"mesi"} (${P.variInfo.lbl})</small>`:""}</span><b class="nt-${k==="tasse"?"tasse":"spese"}">${fmt(v)}</b><em></em></li>${k==="vari"?variDetHTML(P):""}`).join("")}
+  ${(()=>{/* v70 (richiesta di Marco): tasse e spese fisse dello Scadenzario in un'unica voce «Scadenze certe», dettaglio a scomparsa */
+   const sc=x.U.filter(u=>u[2]==="tasse"||u[2]==="fisse"),tot=sum(sc.map(u=>u[1])),ot=x.U.filter(u=>u[2]!=="tasse"&&u[2]!=="fisse");
+   const scH=sc.length?`<li><i style="background:var(--c-aff)"></i><span>Scadenze certe <small>${sc.length} ${sc.length===1?"voce":"voci"} dello Scadenzario${x.tas>0.5?` · di cui tasse ${fmt(x.tas)}`:""}</small></span><b class="nt-spese">${fmt(tot)}</b><em></em></li>
+    <li class="pj-det"><details class="more pjsc" ${PJS_OPEN?"open":""}><summary>Dettaglio</summary><ul class="pleg">${sc.map(([l,v,k])=>`<li><i style="background:var(--${k==="tasse"?"c-tasse":"c-aff"})"></i><span>${esc(l)}</span><b>${fmt(v)}</b><em></em></li>`).join("")}</ul></details></li>`:"";
+   return scH+ot.map(([l,v,k])=>`<li><i style="background:var(--${k==="prest"?"qa":"c-spese"})"></i><span>${esc(l)}${k==="vari"&&P.variInfo?` <small>media ${P.variInfo.n} ${P.variInfo.n===1?"mese":"mesi"} (${P.variInfo.lbl})</small>`:""}</span><b class="nt-spese">${fmt(v)}</b><em></em></li>${k==="vari"?variDetHTML(P):""}`).join("");})()}
   <li class="pj-t"><span>Uscite</span><b class="nt-spese">${fmt(x.usc)}</b></li></ul>
   <dl class="kv">${kv("Surplus previsto <small>entrate − uscite</small>",`<span class="${x.sur<0?"neg":"pos"}">${fmt(x.sur,"sign")}</span>`,"strong")}${x.sond>0.5?kv("Senza i sondaggi <small>solo entrate sicure</small>",`<span class="${x.sur-x.sond<0?"neg":"pos"}">${fmt(x.sur-x.sond,"sign")}</span>`):""}</dl>
   ${x.avv.map(a=>`<p class="note">${a}</p>`).join("")}</div>`;
