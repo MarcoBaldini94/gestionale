@@ -1334,13 +1334,22 @@ function replaceState(obj){S=load(obj);save();render();}
 function hubUrl(){return (lsGet(HUB_URL_KEY)||"").trim().replace(/\/+$/,"")}
 function hubState(){return lsJSON(HUB_STATE_KEY)}
 function setHubState(o){lsSet(HUB_STATE_KEY,JSON.stringify(Object.assign(hubState(),o)))}
+/* v62: stato della connessione con il PC aggiornato da OGNI chiamata all'Hub (backup, elenco, cedolini, cartellini,
+   estratti, sondaggi). Prima l'avviso «PC non raggiungibile» dipendeva solo dall'ultimo INVIO di backup: dopo un errore
+   (PC o telefono momentaneamente offline) restava acceso finché i dati non cambiavano, anche con Tailscale connesso. */
+let HUB_SEEN_T=0;
+function hubSeen(ok,err){const now=Date.now();
+ if(ok){const st=hubState();if(now-HUB_SEEN_T<30000&&!(st.netErrAt>(st.lastSeen||0)))return;HUB_SEEN_T=now;setHubState({lastSeen:now});setTimeout(refreshLinks,0);}
+ else{setHubState({netErr:err,netErrAt:now});setTimeout(refreshLinks,0);}}
 async function hubFetch(path,opt){
  const url=hubUrl();if(!url)throw new Error("indirizzo non impostato");
  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),10000);
  try{const r=await fetch(url+path,Object.assign({signal:ctl.signal,cache:"no-store"},opt||{}));
   let j=null;try{j=await r.json()}catch(e){}
+  hubSeen(true);
   if(!r.ok)throw new Error((j&&j.errore)||("errore HTTP "+r.status));return j;}
- catch(e){throw new Error(e.name==="AbortError"?"il PC non risponde":(e.message==="Failed to fetch"?"PC non raggiungibile (Tailscale attivo?)":e.message));}
+ catch(e){if(e.name==="AbortError"||e.message==="Failed to fetch")hubSeen(false,e.name==="AbortError"?"il PC non risponde":"PC non raggiungibile");
+  throw new Error(e.name==="AbortError"?"il PC non risponde":(e.message==="Failed to fetch"?"PC non raggiungibile (Tailscale attivo?)":e.message));}
  finally{clearTimeout(to)}}
 async function sha(t){try{const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}catch(e){return t.length+":"+t.slice(-64)}}
 let hubBusy=false,hubTimer=null;
@@ -1444,7 +1453,9 @@ const linkMsgs={hub:"",sond:"",file:"",ced:"",cart:"",mov:""};
 function linkMsg(k,t){linkMsgs[k]=t;const el=document.getElementById("lk-"+k+"-msg");if(el){el.textContent=t;el.hidden=!t;}}
 function hubBadge(){const s=hubState(),url=hubUrl();
  if(!url)return ["off","non attivo"];
- if(s.lastErr&&(!s.lastOk||s.lastErrAt>s.lastOk))return ["warn","PC non raggiungibile"];
+ /* due cose distinte: il PC risponde? (qualsiasi chiamata) e l'ultimo invio del backup è riuscito? */
+ if(s.netErrAt&&s.netErrAt>(s.lastSeen||0))return ["warn","PC non raggiungibile (dalle "+fmtWhen(s.netErrAt)+")"];
+ if(s.lastErr&&s.lastErrAt>(s.lastOk||0)&&!(s.lastSeen>s.lastErrAt&&/raggiungibile|non risponde/.test(s.lastErr)))return ["warn","ultimo backup non riuscito: "+s.lastErr];
  return s.lastOk?["ok","ultimo backup "+fmtWhen(s.lastOk)]:["off","nessun backup ancora"];}
 function sondInfo(){const ss=sondState(),e=S.sondExt,hs=svHubState();
  const rows=[["Dati su questo dispositivo",ss.locT?"aggiornati "+fmtWhen(ss.locT):"nessuno"],
@@ -1455,7 +1466,7 @@ function sondInfo(){const ss=sondState(),e=S.sondExt,hs=svHubState();
  return rows.map(([a,b])=>`<dt>${a}</dt><dd class="txtv">${b}</dd>`).join("");}
 function refreshLinks(){
  const [k,t]=hubBadge(),p=document.getElementById("hdr-sync");
- if(p){p.dataset.s=k;document.getElementById("hdr-sync-t").textContent=k==="warn"?"PC non raggiungibile":"Collegamenti";}
+ if(p){p.dataset.s=k;document.getElementById("hdr-sync-t").textContent=k==="warn"?(/^PC/.test(t)?"PC non raggiungibile":"Backup non riuscito"):"Collegamenti";}
  const b=document.getElementById("lk-hub-badge");if(b){b.textContent=t;b.dataset.s=k;}
  const si=document.getElementById("lk-sond-info");if(si)si.innerHTML=sondInfo();
  const ci=document.getElementById("lk-ced-info");if(ci)ci.innerHTML=cedInfo();
@@ -1482,7 +1493,7 @@ V.collegamenti=()=>{const Y=new Date().getFullYear(),T=R.anni[Y];
   <p class="note" id="lk-cart-msg" ${linkMsgs.cart?"":"hidden"}>${linkMsgs.cart}</p>
   <p class="note">I PDF salvati nella cartella OneDrive «Assistente Finanziario/Cartellini» (anche in sottocartelle per anno) vengono letti sul PC di casa dall'Hub. Ne ricava ore, ferie, guardie e attività aggiuntiva e le confronta con quanto pagato nei cedolini.</p></div>
  <div class="box"><h3>Backup automatico sul PC</h3>
-  <p class="lk-badge"><span id="lk-hub-badge" data-s="${hubBadge()[0]}">${hubBadge()[1]}</span></p>
+  <p class="lk-badge"><span id="lk-hub-badge" data-s="${hubBadge()[0]}">${esc(hubBadge()[1])}</span></p>
   <form class="addrow" id="lk-hub-form" autocomplete="off">
    <label class="grow">Indirizzo dell'Hub<input class="in txt" id="lk-hub-url" placeholder="https://jarvis-pc.….ts.net:8443" value="${esc(hubUrl())}" inputmode="url" spellcheck="false"></label>
    <button class="btn" type="submit">Salva e prova</button></form>
